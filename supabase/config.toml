@@ -1,1 +1,4 @@
 project_id = "hpzafbcchzfuztxxxwyz"
+
+[functions.fetch-reddit-media]
+verify_jwt = false
