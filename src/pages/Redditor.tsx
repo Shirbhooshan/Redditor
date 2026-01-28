@@ -51,13 +51,10 @@ const Redditor = () => {
       // Try to construct audio URL
       let audioUrl = null;
       if (hasAudio && videoUrl) {
-        // Extract base path (everything before /DASH_)
         const dashIndex = videoUrl.lastIndexOf('/DASH_');
         if (dashIndex !== -1) {
           const basePath = videoUrl.substring(0, dashIndex);
-          // Try common audio file names
           audioUrl = `${basePath}/DASH_audio.mp4`;
-          console.log('Constructed audio URL:', audioUrl);
         }
       }
 
@@ -71,7 +68,7 @@ const Redditor = () => {
         hasAudio: hasAudio
       });
     }
-    // Check for image posts
+    // Check for image posts (including NSFW preview images)
     else if (postData.post_hint === 'image' && postData.url) {
       foundMedia.push({
         type: 'image',
@@ -80,34 +77,99 @@ const Redditor = () => {
         height: postData.preview?.images?.[0]?.source?.height
       });
     }
-    // Check for hosted video (v.redd.it)
-    else if (postData.domain === 'v.redd.it' && postData.preview?.reddit_video_preview) {
+    // Check for rich:video (embedded videos from other platforms)
+    else if (postData.post_hint === 'rich:video' && postData.preview?.reddit_video_preview) {
       const videoUrl = postData.preview.reddit_video_preview.fallback_url;
-      let audioUrl = null;
-      
-      if (videoUrl) {
-        const dashIndex = videoUrl.lastIndexOf('/DASH_');
-        if (dashIndex !== -1) {
-          const basePath = videoUrl.substring(0, dashIndex);
-          audioUrl = `${basePath}/DASH_audio.mp4`;
-        }
-      }
-      
       foundMedia.push({
         type: 'video',
         url: videoUrl,
-        audioUrl: audioUrl,
         thumbnail: postData.thumbnail,
         width: postData.preview.reddit_video_preview.width,
-        height: postData.preview.reddit_video_preview.height,
-        hasAudio: true
+        height: postData.preview.reddit_video_preview.height
       });
     }
-    // Check for external images
+    // Check for hosted video (v.redd.it)
+    else if (postData.domain === 'v.redd.it') {
+      if (postData.preview?.reddit_video_preview) {
+        const videoUrl = postData.preview.reddit_video_preview.fallback_url;
+        let audioUrl = null;
+        
+        if (videoUrl) {
+          const dashIndex = videoUrl.lastIndexOf('/DASH_');
+          if (dashIndex !== -1) {
+            const basePath = videoUrl.substring(0, dashIndex);
+            audioUrl = `${basePath}/DASH_audio.mp4`;
+          }
+        }
+        
+        foundMedia.push({
+          type: 'video',
+          url: videoUrl,
+          audioUrl: audioUrl,
+          thumbnail: postData.thumbnail,
+          width: postData.preview.reddit_video_preview.width,
+          height: postData.preview.reddit_video_preview.height,
+          hasAudio: true
+        });
+      } else if (postData.media?.reddit_video) {
+        // Fallback to media.reddit_video
+        const videoData = postData.media.reddit_video;
+        const videoUrl = videoData.fallback_url;
+        let audioUrl = null;
+        
+        if (videoData.has_audio && videoUrl) {
+          const dashIndex = videoUrl.lastIndexOf('/DASH_');
+          if (dashIndex !== -1) {
+            const basePath = videoUrl.substring(0, dashIndex);
+            audioUrl = `${basePath}/DASH_audio.mp4`;
+          }
+        }
+        
+        foundMedia.push({
+          type: 'video',
+          url: videoUrl,
+          audioUrl: audioUrl,
+          thumbnail: postData.thumbnail,
+          width: videoData.width,
+          height: videoData.height,
+          hasAudio: videoData.has_audio
+        });
+      }
+    }
+    // Check for external images (including direct links)
     else if (postData.url && /\.(jpg|jpeg|png|gif|webp)$/i.test(postData.url)) {
       foundMedia.push({
         type: 'image',
         url: postData.url
+      });
+    }
+    // Check for imgur and other image hosts
+    else if (postData.url && (postData.url.includes('i.redd.it') || postData.url.includes('imgur.com'))) {
+      // If it's an imgur link without extension, try to get the preview
+      if (postData.preview?.images?.[0]?.source?.url) {
+        const imageUrl = postData.preview.images[0].source.url.replace(/&amp;/g, '&');
+        foundMedia.push({
+          type: 'image',
+          url: imageUrl,
+          width: postData.preview.images[0].source.width,
+          height: postData.preview.images[0].source.height
+        });
+      } else {
+        // Try the URL directly
+        foundMedia.push({
+          type: 'image',
+          url: postData.url
+        });
+      }
+    }
+    // Fallback: Try to use preview images if available
+    else if (postData.preview?.images?.[0]?.source?.url) {
+      const imageUrl = postData.preview.images[0].source.url.replace(/&amp;/g, '&');
+      foundMedia.push({
+        type: 'image',
+        url: imageUrl,
+        width: postData.preview.images[0].source.width,
+        height: postData.preview.images[0].source.height
       });
     }
 
@@ -127,7 +189,6 @@ const Redditor = () => {
       
       // Build the correct path based on sort
       if (sortBy === 'best') {
-        // Best doesn't have a specific endpoint, use default
         finalUrl += '.json';
       } else if (sortBy === 'hot') {
         finalUrl += '/hot.json';
@@ -145,7 +206,9 @@ const Redditor = () => {
       if (sortBy === 'top') {
         params.append('t', topTimeframe);
       }
-      params.append('limit', '100'); // Get more posts per request
+      params.append('limit', '100');
+      params.append('raw_json', '1'); // Get unescaped JSON
+      params.append('include_over_18', 'true'); // Include NSFW content
       
       const queryString = params.toString();
       if (queryString) {
@@ -155,11 +218,20 @@ const Redditor = () => {
       console.log('📍 Fetching URL:', finalUrl);
       return finalUrl;
     } else {
-      // For specific posts, just add .json
+      // For specific posts
       let finalUrl = cleanUrl + '.json';
+      const params = new URLSearchParams();
       if (after) {
-        finalUrl += `?after=${after}`;
+        params.append('after', after);
       }
+      params.append('raw_json', '1');
+      params.append('include_over_18', 'true');
+      
+      const queryString = params.toString();
+      if (queryString) {
+        finalUrl += `?${queryString}`;
+      }
+      
       console.log('📍 Fetching URL:', finalUrl);
       return finalUrl;
     }
@@ -205,14 +277,18 @@ const Redditor = () => {
         if (Array.isArray(data) && data.length > 0 && data[0].data?.children) {
           const post = data[0].data.children[0];
           allMedia.push(...extractMediaFromPost(post));
-          break; // Single post, no pagination
+          break;
         }
         // Handle subreddit listing
         else if (data.data?.children) {
           console.log(`📦 Page ${pagesLoaded + 1}: Got ${data.data.children.length} posts`);
           
           data.data.children.forEach((post: any) => {
-            allMedia.push(...extractMediaFromPost(post));
+            const extracted = extractMediaFromPost(post);
+            if (extracted.length > 0) {
+              console.log(`  ✓ Post "${post.data.title?.substring(0, 50)}..." - ${extracted.length} media`);
+            }
+            allMedia.push(...extracted);
           });
 
           // Get the 'after' token for next page
@@ -234,7 +310,7 @@ const Redditor = () => {
           // Small delay to avoid rate limiting
           await new Promise(resolve => setTimeout(resolve, 500));
         } else {
-          break; // Unknown format
+          break;
         }
       }
 
