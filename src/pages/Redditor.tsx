@@ -5,6 +5,7 @@ import MediaGrid, { MediaItem } from "@/components/MediaGrid";
 import Pagination from "@/components/Pagination";
 
 const ITEMS_PER_PAGE = 30; // 3 columns x 10 rows
+const MAX_REDDIT_PAGES = 10; // Fetch up to 10 pages from Reddit (250+ posts)
 
 const Redditor = () => {
   const [media, setMedia] = useState<MediaItem[]>([]);
@@ -36,14 +37,27 @@ const Redditor = () => {
         }
       });
     }
-    // Check for video posts
-    else if (postData.is_video && postData.media?.reddit_video?.fallback_url) {
+    // Check for video posts - Reddit videos have separate audio
+    else if (postData.is_video && postData.media?.reddit_video) {
+      const videoUrl = postData.media.reddit_video.fallback_url;
+      const hasAudio = postData.media.reddit_video.has_audio;
+      
+      // Construct audio URL - Reddit stores audio separately at /DASH_AUDIO_128.mp4 or /DASH_audio.mp4
+      let audioUrl = null;
+      if (hasAudio && videoUrl) {
+        // Get base URL without the quality suffix
+        const baseUrl = videoUrl.substring(0, videoUrl.lastIndexOf('/'));
+        audioUrl = `${baseUrl}/DASH_AUDIO_128.mp4`;
+      }
+
       foundMedia.push({
         type: 'video',
-        url: postData.media.reddit_video.fallback_url,
+        url: videoUrl,
+        audioUrl: audioUrl, // Include audio URL if available
         thumbnail: postData.thumbnail,
         width: postData.media.reddit_video.width,
-        height: postData.media.reddit_video.height
+        height: postData.media.reddit_video.height,
+        hasAudio: hasAudio
       });
     }
     // Check for image posts
@@ -56,7 +70,7 @@ const Redditor = () => {
       });
     }
     // Check for hosted video (v.redd.it)
-    else if (postData.domain === 'v.redd.it' && postData.preview?.reddit_video_preview?.fallback_url) {
+    else if (postData.domain === 'v.redd.it' && postData.preview?.reddit_video_preview) {
       foundMedia.push({
         type: 'video',
         url: postData.preview.reddit_video_preview.fallback_url,
@@ -76,43 +90,80 @@ const Redditor = () => {
     return foundMedia;
   };
 
+  const fetchRedditPage = async (url: string, after: string | null = null) => {
+    let jsonUrl = url;
+    if (!jsonUrl.endsWith('.json')) {
+      jsonUrl = jsonUrl.replace(/\/$/, '') + '.json';
+    }
+
+    // Add pagination parameter if we have an 'after' token
+    if (after) {
+      jsonUrl += `?after=${after}`;
+    }
+
+    const corsProxy = 'https://corsproxy.io/?';
+    const response = await fetch(corsProxy + encodeURIComponent(jsonUrl), {
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch: ${response.status}`);
+    }
+
+    return await response.json();
+  };
+
   const handleSearch = async (url: string) => {
     setIsLoading(true);
     setHasSearched(true);
     setCurrentPage(1);
 
     try {
-      // Automatically append .json if not present
-      let jsonUrl = url.trim();
-      if (!jsonUrl.endsWith('.json')) {
-        jsonUrl = jsonUrl.replace(/\/$/, '') + '.json';
-      }
+      const allMedia: MediaItem[] = [];
+      let after: string | null = null;
+      let pagesLoaded = 0;
 
-      // Use CORS proxy to bypass CORS restrictions
-      const corsProxy = 'https://corsproxy.io/?';
-      const response = await fetch(corsProxy + encodeURIComponent(jsonUrl), {
-        headers: {
-          'Accept': 'application/json',
-        },
+      toast({
+        title: "Fetching media...",
+        description: "Loading posts from Reddit...",
       });
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch: ${response.status}`);
-      }
+      // Fetch multiple pages from Reddit
+      while (pagesLoaded < MAX_REDDIT_PAGES) {
+        const data = await fetchRedditPage(url.trim(), after);
 
-      const data = await response.json();
-      const allMedia: MediaItem[] = [];
-
-      // Handle single post
-      if (Array.isArray(data) && data.length > 0 && data[0].data?.children) {
-        const post = data[0].data.children[0];
-        allMedia.push(...extractMediaFromPost(post));
-      }
-      // Handle subreddit listing
-      else if (data.data?.children) {
-        data.data.children.forEach((post: any) => {
+        // Handle single post
+        if (Array.isArray(data) && data.length > 0 && data[0].data?.children) {
+          const post = data[0].data.children[0];
           allMedia.push(...extractMediaFromPost(post));
-        });
+          break; // Single post, no pagination
+        }
+        // Handle subreddit listing
+        else if (data.data?.children) {
+          data.data.children.forEach((post: any) => {
+            allMedia.push(...extractMediaFromPost(post));
+          });
+
+          // Get the 'after' token for next page
+          after = data.data.after;
+          pagesLoaded++;
+
+          // Update progress toast
+          toast({
+            title: "Loading...",
+            description: `Loaded ${allMedia.length} media items from ${pagesLoaded} page(s)...`,
+          });
+
+          // If no more pages, stop
+          if (!after) break;
+
+          // Small delay to avoid rate limiting
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } else {
+          break; // Unknown format
+        }
       }
 
       setMedia(allMedia);
@@ -124,8 +175,8 @@ const Redditor = () => {
         });
       } else {
         toast({
-          title: "Success",
-          description: `Found ${allMedia.length} media items`,
+          title: "Success!",
+          description: `Found ${allMedia.length} media items from ${pagesLoaded} page(s)`,
         });
       }
     } catch (error) {
@@ -176,6 +227,7 @@ const Redditor = () => {
             <div className="mb-6 text-muted-foreground text-sm">
               Showing {Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, media.length)}-
               {Math.min(currentPage * ITEMS_PER_PAGE, media.length)} of {media.length} items
+              {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
             </div>
             <MediaGrid
               media={media}

@@ -37,7 +37,7 @@ const Index = () => {
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Person",
-    "name": "Morgan Blake",
+    "name": "Redditor",
     "jobTitle": "Production Photographer",
     "description": "Production photographer specializing in fashion, editorial, and commercial photography. Creating compelling imagery for global brands and publications.",
     "url": "https://morganblake.com",
