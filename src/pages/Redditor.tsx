@@ -7,11 +7,16 @@ import Pagination from "@/components/Pagination";
 const ITEMS_PER_PAGE = 30; // 3 columns x 10 rows
 const MAX_REDDIT_PAGES = 10; // Fetch up to 10 pages from Reddit (250+ posts)
 
+type SortOption = "hot" | "best" | "top" | "new";
+type TopTimeframe = "hour" | "day" | "week" | "month" | "year" | "all";
+
 const Redditor = () => {
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [hasSearched, setHasSearched] = useState(false);
+  const [sortBy, setSortBy] = useState<SortOption>("best");
+  const [topTimeframe, setTopTimeframe] = useState<TopTimeframe>("all");
   const { toast } = useToast();
 
   const totalPages = Math.ceil(media.length / ITEMS_PER_PAGE);
@@ -39,24 +44,30 @@ const Redditor = () => {
     }
     // Check for video posts - Reddit videos have separate audio
     else if (postData.is_video && postData.media?.reddit_video) {
-      const videoUrl = postData.media.reddit_video.fallback_url;
-      const hasAudio = postData.media.reddit_video.has_audio;
+      const videoData = postData.media.reddit_video;
+      const videoUrl = videoData.fallback_url || videoData.hls_url;
+      const hasAudio = videoData.has_audio;
       
-      // Construct audio URL - Reddit stores audio separately at /DASH_AUDIO_128.mp4 or /DASH_audio.mp4
+      // Try to construct audio URL - Reddit stores audio at different paths
       let audioUrl = null;
       if (hasAudio && videoUrl) {
-        // Get base URL without the quality suffix
-        const baseUrl = videoUrl.substring(0, videoUrl.lastIndexOf('/'));
-        audioUrl = `${baseUrl}/DASH_AUDIO_128.mp4`;
+        // Method 1: Try replacing video quality with audio
+        audioUrl = videoUrl.replace(/DASH_\d+\.mp4/, 'DASH_audio.mp4');
+        
+        // Method 2: If that doesn't work, try the 128k version
+        if (!audioUrl.includes('audio')) {
+          const baseUrl = videoUrl.substring(0, videoUrl.lastIndexOf('/'));
+          audioUrl = `${baseUrl}/DASH_AUDIO_128.mp4`;
+        }
       }
 
       foundMedia.push({
         type: 'video',
         url: videoUrl,
-        audioUrl: audioUrl, // Include audio URL if available
-        thumbnail: postData.thumbnail,
-        width: postData.media.reddit_video.width,
-        height: postData.media.reddit_video.height,
+        audioUrl: audioUrl,
+        thumbnail: postData.thumbnail !== 'default' ? postData.thumbnail : undefined,
+        width: videoData.width,
+        height: videoData.height,
         hasAudio: hasAudio
       });
     }
@@ -71,12 +82,21 @@ const Redditor = () => {
     }
     // Check for hosted video (v.redd.it)
     else if (postData.domain === 'v.redd.it' && postData.preview?.reddit_video_preview) {
+      const videoUrl = postData.preview.reddit_video_preview.fallback_url;
+      let audioUrl = null;
+      
+      if (videoUrl) {
+        audioUrl = videoUrl.replace(/DASH_\d+/, 'DASH_audio');
+      }
+      
       foundMedia.push({
         type: 'video',
-        url: postData.preview.reddit_video_preview.fallback_url,
+        url: videoUrl,
+        audioUrl: audioUrl,
         thumbnail: postData.thumbnail,
         width: postData.preview.reddit_video_preview.width,
-        height: postData.preview.reddit_video_preview.height
+        height: postData.preview.reddit_video_preview.height,
+        hasAudio: true
       });
     }
     // Check for external images
@@ -90,16 +110,58 @@ const Redditor = () => {
     return foundMedia;
   };
 
-  const fetchRedditPage = async (url: string, after: string | null = null) => {
-    let jsonUrl = url;
-    if (!jsonUrl.endsWith('.json')) {
-      jsonUrl = jsonUrl.replace(/\/$/, '') + '.json';
+  const buildRedditUrl = (baseUrl: string, after: string | null = null) => {
+    // Remove trailing slash and .json if present
+    let cleanUrl = baseUrl.trim().replace(/\/$/, '').replace(/\.json$/, '');
+    
+    // Check if URL is a subreddit or user profile
+    const isSubreddit = cleanUrl.match(/reddit\.com\/r\/[\w]+$/);
+    const isUserPosts = cleanUrl.match(/reddit\.com\/user\/[\w]+$/);
+    
+    let finalUrl = cleanUrl;
+    
+    // Add sort parameters for subreddits and user profiles
+    if (isSubreddit || isUserPosts) {
+      // Add sort type to URL path
+      if (sortBy === 'best' || sortBy === 'hot') {
+        finalUrl = `${cleanUrl}/${sortBy}`;
+      } else if (sortBy === 'top') {
+        finalUrl = `${cleanUrl}/top`;
+      } else if (sortBy === 'new') {
+        finalUrl = `${cleanUrl}/new`;
+      }
+      
+      // Add .json
+      finalUrl += '.json';
+      
+      // Build query parameters
+      const params = new URLSearchParams();
+      if (after) {
+        params.append('after', after);
+      }
+      if (sortBy === 'top' && topTimeframe) {
+        params.append('t', topTimeframe);
+      }
+      
+      const queryString = params.toString();
+      if (queryString) {
+        finalUrl += `?${queryString}`;
+      }
+    } else {
+      // For specific posts, just add .json and after if needed
+      finalUrl += '.json';
+      if (after) {
+        finalUrl += `?after=${after}`;
+      }
     }
+    
+    return finalUrl;
+  };
 
-    // Add pagination parameter if we have an 'after' token
-    if (after) {
-      jsonUrl += `?after=${after}`;
-    }
+  const fetchRedditPage = async (url: string, after: string | null = null) => {
+    const jsonUrl = buildRedditUrl(url, after);
+    
+    console.log('Fetching:', jsonUrl); // Debug log
 
     const corsProxy = 'https://corsproxy.io/?';
     const response = await fetch(corsProxy + encodeURIComponent(jsonUrl), {
@@ -127,7 +189,7 @@ const Redditor = () => {
 
       toast({
         title: "Fetching media...",
-        description: "Loading posts from Reddit...",
+        description: `Loading ${sortBy === 'top' ? `top posts (${topTimeframe})` : sortBy} posts from Reddit...`,
       });
 
       // Fetch multiple pages from Reddit
@@ -218,7 +280,14 @@ const Redditor = () => {
               : "min-h-[50vh] flex flex-col justify-center"
           }`}
         >
-          <RedditorSearch onSearch={handleSearch} isLoading={isLoading} />
+          <RedditorSearch 
+            onSearch={handleSearch} 
+            isLoading={isLoading}
+            sortBy={sortBy}
+            onSortChange={setSortBy}
+            topTimeframe={topTimeframe}
+            onTopTimeframeChange={setTopTimeframe}
+          />
         </div>
 
         {/* Results */}
@@ -228,6 +297,8 @@ const Redditor = () => {
               Showing {Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, media.length)}-
               {Math.min(currentPage * ITEMS_PER_PAGE, media.length)} of {media.length} items
               {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
+              {sortBy === 'top' && ` • Sorted by: Top (${topTimeframe})`}
+              {sortBy !== 'top' && ` • Sorted by: ${sortBy.charAt(0).toUpperCase() + sortBy.slice(1)}`}
             </div>
             <MediaGrid
               media={media}
