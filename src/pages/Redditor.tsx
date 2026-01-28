@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
 import RedditorSearch from "@/components/RedditorSearch";
 import MediaGrid, { MediaItem } from "@/components/MediaGrid";
 import Pagination from "@/components/Pagination";
@@ -16,6 +15,67 @@ const Redditor = () => {
 
   const totalPages = Math.ceil(media.length / ITEMS_PER_PAGE);
 
+  // Extract media from Reddit post
+  const extractMediaFromPost = (post: any) => {
+    const postData = post.data;
+    const foundMedia: MediaItem[] = [];
+
+    // Check for gallery posts
+    if (postData.is_gallery && postData.media_metadata) {
+      Object.values(postData.media_metadata).forEach((item: any) => {
+        if (item.status === 'valid') {
+          const url = item.s?.u?.replace(/&amp;/g, '&') || item.s?.gif?.replace(/&amp;/g, '&');
+          if (url) {
+            foundMedia.push({
+              type: item.e === 'AnimatedImage' ? 'video' : 'image',
+              url: url,
+              width: item.s?.x,
+              height: item.s?.y
+            });
+          }
+        }
+      });
+    }
+    // Check for video posts
+    else if (postData.is_video && postData.media?.reddit_video?.fallback_url) {
+      foundMedia.push({
+        type: 'video',
+        url: postData.media.reddit_video.fallback_url,
+        thumbnail: postData.thumbnail,
+        width: postData.media.reddit_video.width,
+        height: postData.media.reddit_video.height
+      });
+    }
+    // Check for image posts
+    else if (postData.post_hint === 'image' && postData.url) {
+      foundMedia.push({
+        type: 'image',
+        url: postData.url,
+        width: postData.preview?.images?.[0]?.source?.width,
+        height: postData.preview?.images?.[0]?.source?.height
+      });
+    }
+    // Check for hosted video (v.redd.it)
+    else if (postData.domain === 'v.redd.it' && postData.preview?.reddit_video_preview?.fallback_url) {
+      foundMedia.push({
+        type: 'video',
+        url: postData.preview.reddit_video_preview.fallback_url,
+        thumbnail: postData.thumbnail,
+        width: postData.preview.reddit_video_preview.width,
+        height: postData.preview.reddit_video_preview.height
+      });
+    }
+    // Check for external images
+    else if (postData.url && /\.(jpg|jpeg|png|gif|webp)$/i.test(postData.url)) {
+      foundMedia.push({
+        type: 'image',
+        url: postData.url
+      });
+    }
+
+    return foundMedia;
+  };
+
   const handleSearch = async (url: string) => {
     setIsLoading(true);
     setHasSearched(true);
@@ -23,39 +83,50 @@ const Redditor = () => {
 
     try {
       // Automatically append .json if not present
-      let searchUrl = url.trim();
-      if (!searchUrl.endsWith('.json')) {
-        searchUrl = searchUrl.replace(/\/$/, '') + '.json';
+      let jsonUrl = url.trim();
+      if (!jsonUrl.endsWith('.json')) {
+        jsonUrl = jsonUrl.replace(/\/$/, '') + '.json';
       }
 
-      const { data, error } = await supabase.functions.invoke("fetch-reddit-media", {
-        body: { url: searchUrl },
+      // Use CORS proxy to bypass CORS restrictions
+      const corsProxy = 'https://corsproxy.io/?';
+      const response = await fetch(corsProxy + encodeURIComponent(jsonUrl), {
+        headers: {
+          'Accept': 'application/json',
+        },
       });
 
-      if (error) {
-        throw error;
+      if (!response.ok) {
+        throw new Error(`Failed to fetch: ${response.status}`);
       }
 
-      if (data.error) {
-        toast({
-          title: "Error",
-          description: data.error,
-          variant: "destructive",
+      const data = await response.json();
+      const allMedia: MediaItem[] = [];
+
+      // Handle single post
+      if (Array.isArray(data) && data.length > 0 && data[0].data?.children) {
+        const post = data[0].data.children[0];
+        allMedia.push(...extractMediaFromPost(post));
+      }
+      // Handle subreddit listing
+      else if (data.data?.children) {
+        data.data.children.forEach((post: any) => {
+          allMedia.push(...extractMediaFromPost(post));
         });
-        setMedia([]);
+      }
+
+      setMedia(allMedia);
+
+      if (allMedia.length === 0) {
+        toast({
+          title: "No media found",
+          description: "This Reddit URL doesn't contain any extractable images or videos.",
+        });
       } else {
-        setMedia(data.media || []);
-        if (data.media?.length === 0) {
-          toast({
-            title: "No media found",
-            description: "This Reddit URL doesn't contain any extractable images or videos.",
-          });
-        } else {
-          toast({
-            title: "Success",
-            description: `Found ${data.total} media items`,
-          });
-        }
+        toast({
+          title: "Success",
+          description: `Found ${allMedia.length} media items`,
+        });
       }
     } catch (error) {
       console.error("Error fetching media:", error);
