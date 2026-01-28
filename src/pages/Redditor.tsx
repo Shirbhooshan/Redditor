@@ -48,16 +48,16 @@ const Redditor = () => {
       const videoUrl = videoData.fallback_url || videoData.hls_url;
       const hasAudio = videoData.has_audio;
       
-      // Try to construct audio URL - Reddit stores audio at different paths
+      // Try to construct audio URL
       let audioUrl = null;
       if (hasAudio && videoUrl) {
-        // Method 1: Try replacing video quality with audio
-        audioUrl = videoUrl.replace(/DASH_\d+\.mp4/, 'DASH_audio.mp4');
-        
-        // Method 2: If that doesn't work, try the 128k version
-        if (!audioUrl.includes('audio')) {
-          const baseUrl = videoUrl.substring(0, videoUrl.lastIndexOf('/'));
-          audioUrl = `${baseUrl}/DASH_AUDIO_128.mp4`;
+        // Extract base path (everything before /DASH_)
+        const dashIndex = videoUrl.lastIndexOf('/DASH_');
+        if (dashIndex !== -1) {
+          const basePath = videoUrl.substring(0, dashIndex);
+          // Try common audio file names
+          audioUrl = `${basePath}/DASH_audio.mp4`;
+          console.log('Constructed audio URL:', audioUrl);
         }
       }
 
@@ -86,7 +86,11 @@ const Redditor = () => {
       let audioUrl = null;
       
       if (videoUrl) {
-        audioUrl = videoUrl.replace(/DASH_\d+/, 'DASH_audio');
+        const dashIndex = videoUrl.lastIndexOf('/DASH_');
+        if (dashIndex !== -1) {
+          const basePath = videoUrl.substring(0, dashIndex);
+          audioUrl = `${basePath}/DASH_audio.mp4`;
+        }
       }
       
       foundMedia.push({
@@ -114,54 +118,55 @@ const Redditor = () => {
     // Remove trailing slash and .json if present
     let cleanUrl = baseUrl.trim().replace(/\/$/, '').replace(/\.json$/, '');
     
-    // Check if URL is a subreddit or user profile
-    const isSubreddit = cleanUrl.match(/reddit\.com\/r\/[\w]+$/);
-    const isUserPosts = cleanUrl.match(/reddit\.com\/user\/[\w]+$/);
+    // Check if URL is a subreddit
+    const subredditMatch = cleanUrl.match(/reddit\.com\/r\/([\w]+)/);
     
-    let finalUrl = cleanUrl;
-    
-    // Add sort parameters for subreddits and user profiles
-    if (isSubreddit || isUserPosts) {
-      // Add sort type to URL path
-      if (sortBy === 'best' || sortBy === 'hot') {
-        finalUrl = `${cleanUrl}/${sortBy}`;
-      } else if (sortBy === 'top') {
-        finalUrl = `${cleanUrl}/top`;
-      } else if (sortBy === 'new') {
-        finalUrl = `${cleanUrl}/new`;
-      }
+    if (subredditMatch) {
+      const subreddit = subredditMatch[1];
+      let finalUrl = `https://www.reddit.com/r/${subreddit}`;
       
-      // Add .json
-      finalUrl += '.json';
+      // Build the correct path based on sort
+      if (sortBy === 'best') {
+        // Best doesn't have a specific endpoint, use default
+        finalUrl += '.json';
+      } else if (sortBy === 'hot') {
+        finalUrl += '/hot.json';
+      } else if (sortBy === 'top') {
+        finalUrl += '/top.json';
+      } else if (sortBy === 'new') {
+        finalUrl += '/new.json';
+      }
       
       // Build query parameters
       const params = new URLSearchParams();
       if (after) {
         params.append('after', after);
       }
-      if (sortBy === 'top' && topTimeframe) {
+      if (sortBy === 'top') {
         params.append('t', topTimeframe);
       }
+      params.append('limit', '100'); // Get more posts per request
       
       const queryString = params.toString();
       if (queryString) {
         finalUrl += `?${queryString}`;
       }
+      
+      console.log('📍 Fetching URL:', finalUrl);
+      return finalUrl;
     } else {
-      // For specific posts, just add .json and after if needed
-      finalUrl += '.json';
+      // For specific posts, just add .json
+      let finalUrl = cleanUrl + '.json';
       if (after) {
         finalUrl += `?after=${after}`;
       }
+      console.log('📍 Fetching URL:', finalUrl);
+      return finalUrl;
     }
-    
-    return finalUrl;
   };
 
   const fetchRedditPage = async (url: string, after: string | null = null) => {
     const jsonUrl = buildRedditUrl(url, after);
-    
-    console.log('Fetching:', jsonUrl); // Debug log
 
     const corsProxy = 'https://corsproxy.io/?';
     const response = await fetch(corsProxy + encodeURIComponent(jsonUrl), {
@@ -204,6 +209,8 @@ const Redditor = () => {
         }
         // Handle subreddit listing
         else if (data.data?.children) {
+          console.log(`📦 Page ${pagesLoaded + 1}: Got ${data.data.children.length} posts`);
+          
           data.data.children.forEach((post: any) => {
             allMedia.push(...extractMediaFromPost(post));
           });
@@ -219,7 +226,10 @@ const Redditor = () => {
           });
 
           // If no more pages, stop
-          if (!after) break;
+          if (!after) {
+            console.log('✅ No more pages available');
+            break;
+          }
 
           // Small delay to avoid rate limiting
           await new Promise(resolve => setTimeout(resolve, 500));

@@ -19,7 +19,7 @@ interface MediaGridProps {
 }
 
 const MediaGrid = ({ media, currentPage, itemsPerPage }: MediaGridProps) => {
-  const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
@@ -29,6 +29,16 @@ const MediaGrid = ({ media, currentPage, itemsPerPage }: MediaGridProps) => {
     return null;
   }
 
+  const handleMediaClick = (localIndex: number) => {
+    // Convert local index to global index
+    const globalIndex = startIndex + localIndex;
+    setSelectedIndex(globalIndex);
+  };
+
+  const handleNavigate = (newIndex: number) => {
+    setSelectedIndex(newIndex);
+  };
+
   return (
     <>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -36,7 +46,7 @@ const MediaGrid = ({ media, currentPage, itemsPerPage }: MediaGridProps) => {
           <div
             key={startIndex + index}
             className="relative aspect-square overflow-hidden rounded-lg bg-muted cursor-pointer group"
-            onClick={() => setSelectedMedia(item)}
+            onClick={() => handleMediaClick(index)}
           >
             {item.type === "video" ? (
               <>
@@ -70,10 +80,13 @@ const MediaGrid = ({ media, currentPage, itemsPerPage }: MediaGridProps) => {
         ))}
       </div>
 
-      {selectedMedia && (
+      {selectedIndex !== null && (
         <MediaLightbox
-          media={selectedMedia}
-          onClose={() => setSelectedMedia(null)}
+          media={media[selectedIndex]}
+          allMedia={media}
+          currentIndex={selectedIndex}
+          onClose={() => setSelectedIndex(null)}
+          onNavigate={handleNavigate}
         />
       )}
     </>
