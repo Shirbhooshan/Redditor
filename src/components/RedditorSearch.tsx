@@ -21,7 +21,7 @@ const RedditorSearch = ({ onSearch, isLoading }: RedditorSearchProps) => {
       <div className="relative flex items-center bg-secondary rounded-full border border-border hover:border-muted-foreground/50 focus-within:border-muted-foreground transition-colors">
         <input
           type="url"
-          placeholder="Paste a Reddit post URL..."
+          placeholder="Paste Reddit URL (e.g., https://www.reddit.com/r/pics/comments/...)"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           disabled={isLoading}
@@ -39,9 +39,20 @@ const RedditorSearch = ({ onSearch, isLoading }: RedditorSearchProps) => {
           )}
         </button>
       </div>
-      <p className="text-muted-foreground text-sm mt-4 text-center">
-        Enter a Reddit post, subreddit, or gallery URL to extract all media
-      </p>
+      <div className="mt-4 text-center space-y-2">
+        <p className="text-muted-foreground text-sm">
+          Enter a Reddit post, subreddit, or user URL to extract all images and videos
+        </p>
+        <p className="text-muted-foreground text-xs">
+          Examples: 
+          <code className="mx-1 px-2 py-1 bg-muted rounded">https://www.reddit.com/r/pics</code>
+          or
+          <code className="mx-1 px-2 py-1 bg-muted rounded">https://www.reddit.com/r/INFJers</code>
+        </p>
+        <p className="text-muted-foreground text-xs italic">
+          Note: ".json" will be automatically added if needed
+        </p>
+      </div>
     </form>
   );
 };

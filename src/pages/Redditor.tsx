@@ -22,8 +22,14 @@ const Redditor = () => {
     setCurrentPage(1);
 
     try {
+      // Automatically append .json if not present
+      let searchUrl = url.trim();
+      if (!searchUrl.endsWith('.json')) {
+        searchUrl = searchUrl.replace(/\/$/, '') + '.json';
+      }
+
       const { data, error } = await supabase.functions.invoke("fetch-reddit-media", {
-        body: { url },
+        body: { url: searchUrl },
       });
 
       if (error) {
@@ -42,7 +48,7 @@ const Redditor = () => {
         if (data.media?.length === 0) {
           toast({
             title: "No media found",
-            description: "This Reddit post doesn't contain any extractable images or videos.",
+            description: "This Reddit URL doesn't contain any extractable images or videos.",
           });
         } else {
           toast({
