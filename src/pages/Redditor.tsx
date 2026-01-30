@@ -4,18 +4,14 @@ import RedditorSearch from "@/components/RedditorSearch";
 import MediaGrid, { MediaItem } from "@/components/MediaGrid";
 import Pagination from "@/components/Pagination";
 
-const ITEMS_PER_PAGE = 30; // 3 columns x 10 rows
-const MAX_REDDIT_PAGES = 10; // Fetch up to 10 pages from Reddit (250+ posts)
+const ITEMS_PER_PAGE = 30;
+const MAX_REDDIT_PAGES = 10;
 
 type SortOption = "hot" | "best" | "top" | "new";
 type TopTimeframe = "hour" | "day" | "week" | "month" | "year" | "all";
 
-// Multiple CORS proxies as fallbacks
-const CORS_PROXIES = [
-  'https://api.allorigins.win/raw?url=',
-  'https://corsproxy.io/?',
-  'https://cors-anywhere.herokuapp.com/',
-];
+// 🔥 REPLACE THIS WITH YOUR VERCEL URL AFTER DEPLOYMENT 🔥
+const YOUR_PROXY_URL = 'YOUR-APP-NAME.vercel.app/api/reddit-proxy?url=';
 
 const Redditor = () => {
   const [media, setMedia] = useState<MediaItem[]>([]);
@@ -24,17 +20,14 @@ const Redditor = () => {
   const [hasSearched, setHasSearched] = useState(false);
   const [sortBy, setSortBy] = useState<SortOption>("best");
   const [topTimeframe, setTopTimeframe] = useState<TopTimeframe>("all");
-  const [currentProxyIndex, setCurrentProxyIndex] = useState(0);
   const { toast } = useToast();
 
   const totalPages = Math.ceil(media.length / ITEMS_PER_PAGE);
 
-  // Extract media from Reddit post
   const extractMediaFromPost = (post: any) => {
     const postData = post.data;
     const foundMedia: MediaItem[] = [];
 
-    // Check for gallery posts
     if (postData.is_gallery && postData.media_metadata) {
       Object.values(postData.media_metadata).forEach((item: any) => {
         if (item.status === 'valid') {
@@ -50,7 +43,6 @@ const Redditor = () => {
         }
       });
     }
-    // Check for video posts
     else if (postData.is_video && postData.media?.reddit_video) {
       const videoData = postData.media.reddit_video;
       const videoUrl = videoData.fallback_url || videoData.hls_url;
@@ -75,7 +67,6 @@ const Redditor = () => {
         hasAudio: hasAudio
       });
     }
-    // Check for image posts
     else if (postData.post_hint === 'image' && postData.url) {
       foundMedia.push({
         type: 'image',
@@ -84,7 +75,6 @@ const Redditor = () => {
         height: postData.preview?.images?.[0]?.source?.height
       });
     }
-    // Check for rich:video
     else if (postData.post_hint === 'rich:video' && postData.preview?.reddit_video_preview) {
       const videoUrl = postData.preview.reddit_video_preview.fallback_url;
       foundMedia.push({
@@ -95,7 +85,6 @@ const Redditor = () => {
         height: postData.preview.reddit_video_preview.height
       });
     }
-    // Check for hosted video (v.redd.it)
     else if (postData.domain === 'v.redd.it') {
       if (postData.preview?.reddit_video_preview) {
         const videoUrl = postData.preview.reddit_video_preview.fallback_url;
@@ -142,14 +131,12 @@ const Redditor = () => {
         });
       }
     }
-    // Check for external images
     else if (postData.url && /\.(jpg|jpeg|png|gif|webp)$/i.test(postData.url)) {
       foundMedia.push({
         type: 'image',
         url: postData.url
       });
     }
-    // Check for imgur and other image hosts
     else if (postData.url && (postData.url.includes('i.redd.it') || postData.url.includes('imgur.com'))) {
       if (postData.preview?.images?.[0]?.source?.url) {
         const imageUrl = postData.preview.images[0].source.url.replace(/&amp;/g, '&');
@@ -166,7 +153,6 @@ const Redditor = () => {
         });
       }
     }
-    // Fallback: Try preview images
     else if (postData.preview?.images?.[0]?.source?.url) {
       const imageUrl = postData.preview.images[0].source.url.replace(/&amp;/g, '&');
       foundMedia.push({
@@ -234,47 +220,38 @@ const Redditor = () => {
     }
   };
 
-  const fetchWithFallback = async (jsonUrl: string, proxyIndex: number = 0): Promise<any> => {
-    if (proxyIndex >= CORS_PROXIES.length) {
-      throw new Error('All CORS proxies failed');
-    }
-
-    const proxy = CORS_PROXIES[proxyIndex];
-    const proxyUrl = proxy + encodeURIComponent(jsonUrl);
-    
-    console.log(`🔄 Trying proxy ${proxyIndex + 1}/${CORS_PROXIES.length}:`, proxy);
-
-    try {
-      const response = await fetch(proxyUrl, {
-        headers: {
-          'Accept': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        console.warn(`❌ Proxy ${proxyIndex + 1} failed with status ${response.status}`);
-        // Try next proxy
-        return fetchWithFallback(jsonUrl, proxyIndex + 1);
-      }
-
-      console.log(`✅ Proxy ${proxyIndex + 1} succeeded!`);
-      setCurrentProxyIndex(proxyIndex); // Remember working proxy
-      return await response.json();
-    } catch (error) {
-      console.warn(`❌ Proxy ${proxyIndex + 1} error:`, error);
-      // Try next proxy
-      return fetchWithFallback(jsonUrl, proxyIndex + 1);
-    }
-  };
-
   const fetchRedditPage = async (url: string, after: string | null = null) => {
     const jsonUrl = buildRedditUrl(url, after);
     console.log('📍 Fetching URL:', jsonUrl);
     
-    return fetchWithFallback(jsonUrl, currentProxyIndex);
+    // Use your own proxy
+    const proxyUrl = `https://${YOUR_PROXY_URL}${encodeURIComponent(jsonUrl)}`;
+    console.log('🔗 Via proxy:', proxyUrl);
+
+    const response = await fetch(proxyUrl, {
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch: ${response.status}`);
+    }
+
+    return await response.json();
   };
 
   const handleSearch = async (url: string) => {
+    // Check if proxy is configured
+    if (YOUR_PROXY_URL === 'YOUR-APP-NAME.vercel.app/api/reddit-proxy?url=') {
+      toast({
+        title: "⚠️ Proxy Not Configured",
+        description: "Please deploy your proxy to Vercel and update YOUR_PROXY_URL in the code. See SETUP_GUIDE.md for instructions.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsLoading(true);
     setHasSearched(true);
     setCurrentPage(1);
@@ -341,9 +318,7 @@ const Redditor = () => {
       console.error("Error fetching media:", error);
       toast({
         title: "Error",
-        description: error instanceof Error && error.message === 'All CORS proxies failed' 
-          ? "All proxy servers are unavailable. Please try again later or use a CORS browser extension."
-          : "Failed to fetch media from Reddit. Please try again.",
+        description: "Failed to fetch media from Reddit. Check console for details.",
         variant: "destructive",
       });
       setMedia([]);
