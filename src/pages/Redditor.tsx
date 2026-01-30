@@ -10,6 +10,13 @@ const MAX_REDDIT_PAGES = 10; // Fetch up to 10 pages from Reddit (250+ posts)
 type SortOption = "hot" | "best" | "top" | "new";
 type TopTimeframe = "hour" | "day" | "week" | "month" | "year" | "all";
 
+// Multiple CORS proxies as fallbacks
+const CORS_PROXIES = [
+  'https://api.allorigins.win/raw?url=',
+  'https://corsproxy.io/?',
+  'https://cors-anywhere.herokuapp.com/',
+];
+
 const Redditor = () => {
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -17,6 +24,7 @@ const Redditor = () => {
   const [hasSearched, setHasSearched] = useState(false);
   const [sortBy, setSortBy] = useState<SortOption>("best");
   const [topTimeframe, setTopTimeframe] = useState<TopTimeframe>("all");
+  const [currentProxyIndex, setCurrentProxyIndex] = useState(0);
   const { toast } = useToast();
 
   const totalPages = Math.ceil(media.length / ITEMS_PER_PAGE);
@@ -42,13 +50,12 @@ const Redditor = () => {
         }
       });
     }
-    // Check for video posts - Reddit videos have separate audio
+    // Check for video posts
     else if (postData.is_video && postData.media?.reddit_video) {
       const videoData = postData.media.reddit_video;
       const videoUrl = videoData.fallback_url || videoData.hls_url;
       const hasAudio = videoData.has_audio;
       
-      // Try to construct audio URL
       let audioUrl = null;
       if (hasAudio && videoUrl) {
         const dashIndex = videoUrl.lastIndexOf('/DASH_');
@@ -68,7 +75,7 @@ const Redditor = () => {
         hasAudio: hasAudio
       });
     }
-    // Check for image posts (including NSFW preview images)
+    // Check for image posts
     else if (postData.post_hint === 'image' && postData.url) {
       foundMedia.push({
         type: 'image',
@@ -77,7 +84,7 @@ const Redditor = () => {
         height: postData.preview?.images?.[0]?.source?.height
       });
     }
-    // Check for rich:video (embedded videos from other platforms)
+    // Check for rich:video
     else if (postData.post_hint === 'rich:video' && postData.preview?.reddit_video_preview) {
       const videoUrl = postData.preview.reddit_video_preview.fallback_url;
       foundMedia.push({
@@ -112,7 +119,6 @@ const Redditor = () => {
           hasAudio: true
         });
       } else if (postData.media?.reddit_video) {
-        // Fallback to media.reddit_video
         const videoData = postData.media.reddit_video;
         const videoUrl = videoData.fallback_url;
         let audioUrl = null;
@@ -136,7 +142,7 @@ const Redditor = () => {
         });
       }
     }
-    // Check for external images (including direct links)
+    // Check for external images
     else if (postData.url && /\.(jpg|jpeg|png|gif|webp)$/i.test(postData.url)) {
       foundMedia.push({
         type: 'image',
@@ -145,7 +151,6 @@ const Redditor = () => {
     }
     // Check for imgur and other image hosts
     else if (postData.url && (postData.url.includes('i.redd.it') || postData.url.includes('imgur.com'))) {
-      // If it's an imgur link without extension, try to get the preview
       if (postData.preview?.images?.[0]?.source?.url) {
         const imageUrl = postData.preview.images[0].source.url.replace(/&amp;/g, '&');
         foundMedia.push({
@@ -155,14 +160,13 @@ const Redditor = () => {
           height: postData.preview.images[0].source.height
         });
       } else {
-        // Try the URL directly
         foundMedia.push({
           type: 'image',
           url: postData.url
         });
       }
     }
-    // Fallback: Try to use preview images if available
+    // Fallback: Try preview images
     else if (postData.preview?.images?.[0]?.source?.url) {
       const imageUrl = postData.preview.images[0].source.url.replace(/&amp;/g, '&');
       foundMedia.push({
@@ -177,17 +181,14 @@ const Redditor = () => {
   };
 
   const buildRedditUrl = (baseUrl: string, after: string | null = null) => {
-    // Remove trailing slash and .json if present
     let cleanUrl = baseUrl.trim().replace(/\/$/, '').replace(/\.json$/, '');
     
-    // Check if URL is a subreddit
     const subredditMatch = cleanUrl.match(/reddit\.com\/r\/([\w]+)/);
     
     if (subredditMatch) {
       const subreddit = subredditMatch[1];
       let finalUrl = `https://www.reddit.com/r/${subreddit}`;
       
-      // Build the correct path based on sort
       if (sortBy === 'best') {
         finalUrl += '.json';
       } else if (sortBy === 'hot') {
@@ -198,7 +199,6 @@ const Redditor = () => {
         finalUrl += '/new.json';
       }
       
-      // Build query parameters
       const params = new URLSearchParams();
       if (after) {
         params.append('after', after);
@@ -207,18 +207,16 @@ const Redditor = () => {
         params.append('t', topTimeframe);
       }
       params.append('limit', '100');
-      params.append('raw_json', '1'); // Get unescaped JSON
-      params.append('include_over_18', 'true'); // Include NSFW content
+      params.append('raw_json', '1');
+      params.append('include_over_18', 'true');
       
       const queryString = params.toString();
       if (queryString) {
         finalUrl += `?${queryString}`;
       }
       
-      console.log('📍 Fetching URL:', finalUrl);
       return finalUrl;
     } else {
-      // For specific posts
       let finalUrl = cleanUrl + '.json';
       const params = new URLSearchParams();
       if (after) {
@@ -232,26 +230,48 @@ const Redditor = () => {
         finalUrl += `?${queryString}`;
       }
       
-      console.log('📍 Fetching URL:', finalUrl);
       return finalUrl;
+    }
+  };
+
+  const fetchWithFallback = async (jsonUrl: string, proxyIndex: number = 0): Promise<any> => {
+    if (proxyIndex >= CORS_PROXIES.length) {
+      throw new Error('All CORS proxies failed');
+    }
+
+    const proxy = CORS_PROXIES[proxyIndex];
+    const proxyUrl = proxy + encodeURIComponent(jsonUrl);
+    
+    console.log(`🔄 Trying proxy ${proxyIndex + 1}/${CORS_PROXIES.length}:`, proxy);
+
+    try {
+      const response = await fetch(proxyUrl, {
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        console.warn(`❌ Proxy ${proxyIndex + 1} failed with status ${response.status}`);
+        // Try next proxy
+        return fetchWithFallback(jsonUrl, proxyIndex + 1);
+      }
+
+      console.log(`✅ Proxy ${proxyIndex + 1} succeeded!`);
+      setCurrentProxyIndex(proxyIndex); // Remember working proxy
+      return await response.json();
+    } catch (error) {
+      console.warn(`❌ Proxy ${proxyIndex + 1} error:`, error);
+      // Try next proxy
+      return fetchWithFallback(jsonUrl, proxyIndex + 1);
     }
   };
 
   const fetchRedditPage = async (url: string, after: string | null = null) => {
     const jsonUrl = buildRedditUrl(url, after);
-
-    const corsProxy = 'https://corsproxy.io/?';
-    const response = await fetch(corsProxy + encodeURIComponent(jsonUrl), {
-      headers: {
-        'Accept': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch: ${response.status}`);
-    }
-
-    return await response.json();
+    console.log('📍 Fetching URL:', jsonUrl);
+    
+    return fetchWithFallback(jsonUrl, currentProxyIndex);
   };
 
   const handleSearch = async (url: string) => {
@@ -269,45 +289,35 @@ const Redditor = () => {
         description: `Loading ${sortBy === 'top' ? `top posts (${topTimeframe})` : sortBy} posts from Reddit...`,
       });
 
-      // Fetch multiple pages from Reddit
       while (pagesLoaded < MAX_REDDIT_PAGES) {
         const data = await fetchRedditPage(url.trim(), after);
 
-        // Handle single post
         if (Array.isArray(data) && data.length > 0 && data[0].data?.children) {
           const post = data[0].data.children[0];
           allMedia.push(...extractMediaFromPost(post));
           break;
         }
-        // Handle subreddit listing
         else if (data.data?.children) {
           console.log(`📦 Page ${pagesLoaded + 1}: Got ${data.data.children.length} posts`);
           
           data.data.children.forEach((post: any) => {
             const extracted = extractMediaFromPost(post);
-            if (extracted.length > 0) {
-              console.log(`  ✓ Post "${post.data.title?.substring(0, 50)}..." - ${extracted.length} media`);
-            }
             allMedia.push(...extracted);
           });
 
-          // Get the 'after' token for next page
           after = data.data.after;
           pagesLoaded++;
 
-          // Update progress toast
           toast({
             title: "Loading...",
             description: `Loaded ${allMedia.length} media items from ${pagesLoaded} page(s)...`,
           });
 
-          // If no more pages, stop
           if (!after) {
             console.log('✅ No more pages available');
             break;
           }
 
-          // Small delay to avoid rate limiting
           await new Promise(resolve => setTimeout(resolve, 500));
         } else {
           break;
@@ -331,7 +341,9 @@ const Redditor = () => {
       console.error("Error fetching media:", error);
       toast({
         title: "Error",
-        description: "Failed to fetch media from Reddit. Please try again.",
+        description: error instanceof Error && error.message === 'All CORS proxies failed' 
+          ? "All proxy servers are unavailable. Please try again later or use a CORS browser extension."
+          : "Failed to fetch media from Reddit. Please try again.",
         variant: "destructive",
       });
       setMedia([]);
@@ -347,7 +359,6 @@ const Redditor = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header with title */}
       <header className="py-8">
         <h1 className="text-center">
           <span className="text-5xl md:text-6xl font-bold text-primary tracking-tight">
@@ -356,9 +367,7 @@ const Redditor = () => {
         </h1>
       </header>
 
-      {/* Main content */}
       <main className="container max-w-6xl mx-auto px-4 pb-16">
-        {/* Search section - centered when no results */}
         <div
           className={`transition-all duration-500 ${
             hasSearched && media.length > 0
@@ -376,7 +385,6 @@ const Redditor = () => {
           />
         </div>
 
-        {/* Results */}
         {hasSearched && media.length > 0 && (
           <>
             <div className="mb-6 text-muted-foreground text-sm">
@@ -399,7 +407,6 @@ const Redditor = () => {
           </>
         )}
 
-        {/* Empty state */}
         {hasSearched && !isLoading && media.length === 0 && (
           <div className="text-center py-20">
             <p className="text-muted-foreground text-lg">
