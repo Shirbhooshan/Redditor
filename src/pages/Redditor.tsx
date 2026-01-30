@@ -11,7 +11,7 @@ type SortOption = "hot" | "best" | "top" | "new";
 type TopTimeframe = "hour" | "day" | "week" | "month" | "year" | "all";
 
 // 🔥 REPLACE THIS WITH YOUR VERCEL URL AFTER DEPLOYMENT 🔥
-const YOUR_PROXY_URL = 'https://readitall.netlify.app/api/reddit-proxy?url=';
+const YOUR_PROXY_URL = 'https://redditor-blue.vercel.app/api/reddit-proxy?url=';
 
 const Redditor = () => {
   const [media, setMedia] = useState<MediaItem[]>([]);
@@ -243,7 +243,7 @@ const Redditor = () => {
 
   const handleSearch = async (url: string) => {
     // Check if proxy is configured
-    if (YOUR_PROXY_URL === 'https://readitall.netlify.app/api/reddit-proxy?url=') {
+    if (YOUR_PROXY_URL === 'https://redditor-blue.vercel.app/api/reddit-proxy?url=') {
       toast({
         title: "⚠️ Proxy Not Configured",
         description: "Please deploy your proxy to Vercel and update YOUR_PROXY_URL in the code. See SETUP_GUIDE.md for instructions.",
