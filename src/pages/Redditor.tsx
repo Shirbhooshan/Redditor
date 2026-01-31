@@ -10,8 +10,9 @@ const MAX_REDDIT_PAGES = 10;
 type SortOption = "hot" | "best" | "top" | "new";
 type TopTimeframe = "hour" | "day" | "week" | "month" | "year" | "all";
 
-// 🔥 REPLACE THIS WITH YOUR VERCEL URL AFTER DEPLOYMENT 🔥
-const YOUR_PROXY_URL = 'https://redditor-jet.vercel.app/api/reddit-proxy?url=';
+// 🔥 IMPORTANT: Use relative path for Netlify Functions
+// This automatically works on both localhost and production
+const PROXY_URL = '/.netlify/functions/reddit-proxy?url=';
 
 const Redditor = () => {
   const [media, setMedia] = useState<MediaItem[]>([]);
@@ -224,9 +225,9 @@ const Redditor = () => {
     const jsonUrl = buildRedditUrl(url, after);
     console.log('📍 Fetching URL:', jsonUrl);
     
-    // Use your own proxy
-    const proxyUrl = `https://${YOUR_PROXY_URL}${encodeURIComponent(jsonUrl)}`;
-    console.log('🔗 Via proxy:', proxyUrl);
+    // Use Netlify Function (works on both localhost and production)
+    const proxyUrl = `${PROXY_URL}${encodeURIComponent(jsonUrl)}`;
+    console.log('🔗 Via Netlify Function:', proxyUrl);
 
     const response = await fetch(proxyUrl, {
       headers: {
@@ -235,6 +236,8 @@ const Redditor = () => {
     });
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Proxy error:', response.status, errorText);
       throw new Error(`Failed to fetch: ${response.status}`);
     }
 
@@ -242,16 +245,6 @@ const Redditor = () => {
   };
 
   const handleSearch = async (url: string) => {
-    // Check if proxy is configured
-    if (YOUR_PROXY_URL === 'https://redditor-jet.vercel.app/api/reddit-proxy?url=') {
-      toast({
-        title: "⚠️ Proxy Not Configured",
-        description: "Please deploy your proxy to Vercel and update YOUR_PROXY_URL in the code. See SETUP_GUIDE.md for instructions.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setIsLoading(true);
     setHasSearched(true);
     setCurrentPage(1);
