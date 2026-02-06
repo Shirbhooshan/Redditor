@@ -10,8 +10,7 @@ const MAX_REDDIT_PAGES = 10;
 type SortOption = "hot" | "best" | "top" | "new";
 type TopTimeframe = "hour" | "day" | "week" | "month" | "year" | "all";
 
-// 🔥 IMPORTANT: Use relative path for Netlify Functions
-// This automatically works on both localhost and production
+// Use relative path for Netlify Functions
 const PROXY_URL = '/.netlify/functions/reddit-proxy?url=';
 
 const Redditor = () => {
@@ -225,23 +224,49 @@ const Redditor = () => {
     const jsonUrl = buildRedditUrl(url, after);
     console.log('📍 Fetching URL:', jsonUrl);
     
-    // Use Netlify Function (works on both localhost and production)
-    const proxyUrl = `${PROXY_URL}${encodeURIComponent(jsonUrl)}`;
-    console.log('🔗 Via Netlify Function:', proxyUrl);
+    // Try method 1: Netlify Function proxy
+    try {
+      const proxyUrl = `${PROXY_URL}${encodeURIComponent(jsonUrl)}`;
+      console.log('🔗 Method 1: Via Netlify Function:', proxyUrl);
 
-    const response = await fetch(proxyUrl, {
-      headers: {
-        'Accept': 'application/json',
-      },
-    });
+      const response = await fetch(proxyUrl, {
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Proxy error:', response.status, errorText);
-      throw new Error(`Failed to fetch: ${response.status}`);
+      if (response.ok) {
+        return await response.json();
+      }
+      
+      console.warn('⚠️ Method 1 failed with status:', response.status);
+    } catch (error) {
+      console.warn('⚠️ Method 1 error:', error);
     }
 
-    return await response.json();
+    // Try method 2: Direct fetch with old.reddit.com
+    try {
+      console.log('🔗 Method 2: Direct fetch with old.reddit.com');
+      const oldRedditUrl = jsonUrl.replace('www.reddit.com', 'old.reddit.com');
+      
+      const response = await fetch(oldRedditUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'application/json',
+        },
+        mode: 'cors',
+      });
+
+      if (response.ok) {
+        return await response.json();
+      }
+      
+      console.warn('⚠️ Method 2 failed with status:', response.status);
+    } catch (error) {
+      console.warn('⚠️ Method 2 error:', error);
+    }
+
+    throw new Error('All fetch methods failed. Reddit may be blocking requests. Try:\n1. Using old.reddit.com URLs directly\n2. Waiting a few minutes\n3. Using a VPN if available');
   };
 
   const handleSearch = async (url: string) => {
@@ -311,7 +336,7 @@ const Redditor = () => {
       console.error("Error fetching media:", error);
       toast({
         title: "Error",
-        description: "Failed to fetch media from Reddit. Check console for details.",
+        description: error instanceof Error ? error.message : "Failed to fetch media from Reddit. Check console for details.",
         variant: "destructive",
       });
       setMedia([]);
