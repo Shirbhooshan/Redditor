@@ -14,6 +14,7 @@ interface RedditorSearchProps {
 }
 
 const PREFIX = "https://www.reddit.com/r/";
+const SHORT_PREFIX = "r/";
 
 const RedditorSearch = ({
   onSearch,
@@ -34,7 +35,6 @@ const RedditorSearch = ({
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let val = e.target.value;
-    // If user pastes a full Reddit URL, strip it down to just the subreddit name
     if (val.includes("reddit.com/r/")) {
       const match = val.match(/reddit\.com\/r\/([^/?#\s]+)/);
       if (match) val = match[1];
@@ -49,15 +49,15 @@ const RedditorSearch = ({
         className="relative flex items-center bg-secondary rounded-full border border-border hover:border-muted-foreground/50 transition-colors cursor-text"
         onClick={() => inputRef.current?.focus()}
       >
-        {/* Dimmed non-editable prefix */}
+        {/* Prefix — full on md+, short on mobile */}
         <span
-          className="pl-6 text-base text-muted-foreground/40 select-none whitespace-nowrap flex-shrink-0"
+          className="pl-4 sm:pl-6 text-sm sm:text-base text-muted-foreground/40 select-none whitespace-nowrap flex-shrink-0"
           style={{ pointerEvents: "none" }}
         >
-          {PREFIX}
+          <span className="hidden sm:inline">{PREFIX}</span>
+          <span className="inline sm:hidden">{SHORT_PREFIX}</span>
         </span>
 
-        {/* Editable subreddit name */}
         <input
           ref={inputRef}
           type="text"
@@ -69,20 +69,20 @@ const RedditorSearch = ({
           autoCorrect="off"
           autoCapitalize="off"
           spellCheck={false}
-          className="flex-1 min-w-0 bg-transparent py-4 pr-2 text-base text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-0 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex-1 min-w-0 bg-transparent py-3 sm:py-4 pr-2 text-sm sm:text-base text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-0 disabled:cursor-not-allowed disabled:opacity-50"
         />
 
         <button
           type="submit"
           disabled={isLoading || !subreddit.trim()}
-          className="flex items-center justify-center h-10 w-10 mr-2 rounded-full bg-foreground text-background hover:bg-foreground/90 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed transition-colors flex-shrink-0"
+          className="flex items-center justify-center h-9 w-9 sm:h-10 sm:w-10 mr-2 rounded-full bg-foreground text-background hover:bg-foreground/90 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed transition-colors flex-shrink-0"
         >
-          {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ArrowUp className="h-5 w-5" />}
+          {isLoading ? <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" /> : <ArrowUp className="h-4 w-4 sm:h-5 sm:w-5" />}
         </button>
       </div>
 
       {/* Sort controls */}
-      <div className="flex flex-col sm:flex-row gap-4 items-center justify-center">
+      <div className="flex flex-wrap gap-3 items-center justify-center">
         <div className="flex items-center gap-2">
           <label className="text-sm font-medium text-muted-foreground">Sort:</label>
           <select

@@ -9,37 +9,19 @@ interface PaginationProps {
 const Pagination = ({ currentPage, totalPages, onPageChange }: PaginationProps) => {
   if (totalPages <= 1) return null;
 
-  // Generate page numbers to display
   const getPageNumbers = () => {
     const pages: (number | string)[] = [];
-    const maxVisible = 7; // Show 7 page numbers at most
+    const maxVisible = 7;
 
     if (totalPages <= maxVisible) {
-      // Show all pages if total is small
-      for (let i = 1; i <= totalPages; i++) {
-        pages.push(i);
-      }
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
     } else {
-      // Always show first page
       pages.push(1);
-
-      if (currentPage > 3) {
-        pages.push('...');
-      }
-
-      // Show pages around current page
+      if (currentPage > 3) pages.push("...");
       const start = Math.max(2, currentPage - 1);
       const end = Math.min(totalPages - 1, currentPage + 1);
-
-      for (let i = start; i <= end; i++) {
-        pages.push(i);
-      }
-
-      if (currentPage < totalPages - 2) {
-        pages.push('...');
-      }
-
-      // Always show last page
+      for (let i = start; i <= end; i++) pages.push(i);
+      if (currentPage < totalPages - 2) pages.push("...");
       pages.push(totalPages);
     }
 
@@ -49,8 +31,8 @@ const Pagination = ({ currentPage, totalPages, onPageChange }: PaginationProps) 
   const pageNumbers = getPageNumbers();
 
   return (
-    <div className="flex items-center justify-center gap-2 mt-8 mb-4">
-      {/* Previous Button */}
+    <div className="flex items-center justify-center gap-1.5 sm:gap-2 mt-8 mb-4">
+      {/* Previous */}
       <button
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage === 1}
@@ -60,40 +42,42 @@ const Pagination = ({ currentPage, totalPages, onPageChange }: PaginationProps) 
         <ChevronLeft className="h-5 w-5" />
       </button>
 
-      {/* Page Numbers */}
-      {pageNumbers.map((page, index) => {
-        if (page === '...') {
+      {/* Page numbers — hidden on mobile, visible on sm+ */}
+      <div className="hidden sm:flex items-center gap-1.5">
+        {pageNumbers.map((page, index) => {
+          if (page === "...") {
+            return (
+              <span key={`ellipsis-${index}`} className="flex items-center justify-center h-10 w-10 text-muted-foreground">
+                ...
+              </span>
+            );
+          }
+          const pageNum = page as number;
+          const isActive = pageNum === currentPage;
           return (
-            <span
-              key={`ellipsis-${index}`}
-              className="flex items-center justify-center h-10 w-10 text-muted-foreground"
+            <button
+              key={pageNum}
+              onClick={() => onPageChange(pageNum)}
+              className={`flex items-center justify-center h-10 w-10 rounded-lg border transition-colors ${
+                isActive
+                  ? "bg-primary text-primary-foreground border-primary font-semibold"
+                  : "border-border bg-background hover:bg-muted"
+              }`}
+              aria-label={`Page ${pageNum}`}
+              aria-current={isActive ? "page" : undefined}
             >
-              ...
-            </span>
+              {pageNum}
+            </button>
           );
-        }
+        })}
+      </div>
 
-        const pageNum = page as number;
-        const isActive = pageNum === currentPage;
+      {/* Mobile: just show current / total */}
+      <span className="sm:hidden text-sm text-muted-foreground px-3 py-2 border border-border rounded-lg bg-background min-w-[80px] text-center">
+        {currentPage} / {totalPages}
+      </span>
 
-        return (
-          <button
-            key={pageNum}
-            onClick={() => onPageChange(pageNum)}
-            className={`flex items-center justify-center h-10 w-10 rounded-lg border transition-colors ${
-              isActive
-                ? 'bg-primary text-primary-foreground border-primary font-semibold'
-                : 'border-border bg-background hover:bg-muted'
-            }`}
-            aria-label={`Page ${pageNum}`}
-            aria-current={isActive ? 'page' : undefined}
-          >
-            {pageNum}
-          </button>
-        );
-      })}
-
-      {/* Next Button */}
+      {/* Next */}
       <button
         onClick={() => onPageChange(currentPage + 1)}
         disabled={currentPage === totalPages}

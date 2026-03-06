@@ -10,7 +10,6 @@ interface MediaLightboxProps {
   onNavigate: (index: number) => void;
 }
 
-// ── helpers ──────────────────────────────────────────────────────────────────
 const fmt = (s: number) => {
   if (!isFinite(s) || isNaN(s)) return "0:00";
   const m = Math.floor(s / 60);
@@ -18,7 +17,6 @@ const fmt = (s: number) => {
   return `${m}:${sec.toString().padStart(2, "0")}`;
 };
 
-// ── Shared scrub bar ──────────────────────────────────────────────────────────
 const ScrubBar = ({ current, duration, onChange }: { current: number; duration: number; onChange: (t: number) => void }) => {
   const pct = duration > 0 ? (current / duration) * 100 : 0;
   return (
@@ -39,20 +37,20 @@ const ScrubBar = ({ current, duration, onChange }: { current: number; duration: 
   );
 };
 
-// ── Volume control ────────────────────────────────────────────────────────────
 const VolumeControl = ({
   volume, muted, onVolumeChange, onToggleMute,
 }: { volume: number; muted: boolean; onVolumeChange: (v: number) => void; onToggleMute: () => void }) => {
   const pct = (muted ? 0 : volume) * 100;
   return (
     <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-      <button onClick={onToggleMute} className="text-white/80 hover:text-white transition-colors">
+      <button onClick={onToggleMute} className="text-white/80 hover:text-white transition-colors p-1">
         {muted || volume === 0 ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
       </button>
+      {/* Hide volume slider on mobile — use mute button only */}
       <input
         type="range" min={0} max={1} step={0.01} value={muted ? 0 : volume}
         onChange={(e) => onVolumeChange(parseFloat(e.target.value))}
-        className="w-20 h-1.5 rounded-full appearance-none cursor-pointer"
+        className="hidden sm:block w-20 h-1.5 rounded-full appearance-none cursor-pointer"
         style={{
           background: `linear-gradient(to right, #f97316 ${pct}%, rgba(255,255,255,0.2) ${pct}%)`,
           accentColor: "#f97316",
@@ -62,7 +60,6 @@ const VolumeControl = ({
   );
 };
 
-// ── GIF player — muted autoplay MP4 + frame scrubber ─────────────────────────
 const GifPlayer = ({ src }: { src: string }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [duration, setDuration] = useState(0);
@@ -101,22 +98,22 @@ const GifPlayer = ({ src }: { src: string }) => {
   const currentFrame = Math.round(currentTime * fps);
 
   return (
-    <div className="flex flex-col items-center gap-3" style={{ maxWidth: "90vw" }}>
+    <div className="flex flex-col items-center gap-3 w-full max-w-[90vw]">
       <video
         ref={videoRef}
         src={src}
         autoPlay loop muted playsInline
-        className="rounded-lg object-contain"
-        style={{ maxHeight: "75vh", maxWidth: "90vw" }}
+        className="rounded-lg object-contain w-full"
+        style={{ maxHeight: "65vh" }}
       />
       {loaded && (
-        <div className="w-full bg-black/70 rounded-xl px-4 py-3 flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
+        <div className="w-full bg-black/70 rounded-xl px-3 sm:px-4 py-2 sm:py-3 flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
           <ScrubBar current={currentTime} duration={duration} onChange={(t) => { if (videoRef.current) videoRef.current.currentTime = t; }} />
           <div className="flex items-center justify-between">
-            <button onClick={togglePlay} className="text-white hover:text-orange-400 transition-colors">
+            <button onClick={togglePlay} className="text-white hover:text-orange-400 transition-colors p-1">
               {playing ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
             </button>
-            <span className="text-white/50 text-xs font-mono">frame {currentFrame} / {totalFrames}</span>
+            <span className="text-white/50 text-xs font-mono hidden sm:inline">frame {currentFrame} / {totalFrames}</span>
             <span className="text-white/50 text-xs font-mono">{fmt(currentTime)} / {fmt(duration)}</span>
           </div>
         </div>
@@ -125,7 +122,6 @@ const GifPlayer = ({ src }: { src: string }) => {
   );
 };
 
-// ── Video player — custom controls, synced separate audio track ───────────────
 const VideoPlayer = ({ src, audioSrc, hasAudio }: { src: string; audioSrc?: string; hasAudio?: boolean }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -138,7 +134,6 @@ const VideoPlayer = ({ src, audioSrc, hasAudio }: { src: string; audioSrc?: stri
   const [audioFailed, setAudioFailed] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
-  // Video events + autoplay
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
@@ -150,7 +145,6 @@ const VideoPlayer = ({ src, audioSrc, hasAudio }: { src: string; audioSrc?: stri
     v.addEventListener("timeupdate", onTime);
     v.addEventListener("play", onPlay);
     v.addEventListener("pause", onPause);
-    // Autoplay
     v.play().catch(() => {});
     return () => {
       v.removeEventListener("loadedmetadata", onMeta);
@@ -160,7 +154,6 @@ const VideoPlayer = ({ src, audioSrc, hasAudio }: { src: string; audioSrc?: stri
     };
   }, [src]);
 
-  // Audio loading with fallback URLs
   useEffect(() => {
     if (!audioSrc || !audioRef.current) return;
     const a = audioRef.current;
@@ -177,7 +170,6 @@ const VideoPlayer = ({ src, audioSrc, hasAudio }: { src: string; audioSrc?: stri
     return () => { a.removeEventListener("loadeddata", onLoad); a.removeEventListener("error", onError); };
   }, [audioSrc]);
 
-  // Sync video ↔ separate audio track
   useEffect(() => {
     const v = videoRef.current;
     const a = audioRef.current;
@@ -212,10 +204,9 @@ const VideoPlayer = ({ src, audioSrc, hasAudio }: { src: string; audioSrc?: stri
   const handleVolumeChange = (val: number) => {
     setVolume(val);
     setMuted(val === 0);
-    // If there's a separate audio track, volume goes there; otherwise to video
     if (audioSrc) {
       if (audioRef.current) { audioRef.current.volume = val; audioRef.current.muted = false; }
-      if (videoRef.current) videoRef.current.muted = true; // video track stays muted
+      if (videoRef.current) videoRef.current.muted = true;
     } else {
       if (videoRef.current) { videoRef.current.volume = val; videoRef.current.muted = val === 0; }
     }
@@ -232,36 +223,30 @@ const VideoPlayer = ({ src, audioSrc, hasAudio }: { src: string; audioSrc?: stri
   };
 
   return (
-    <div className="flex flex-col items-center gap-3" style={{ maxWidth: "90vw" }}>
-      {/* Video is always muted at element level when separate audio track exists */}
+    <div className="flex flex-col items-center gap-3 w-full max-w-[90vw]">
       <video
         ref={videoRef}
         src={src}
         muted={!!audioSrc}
         loop
         playsInline
-        className="rounded-lg object-contain"
-        style={{ maxHeight: "75vh", maxWidth: "90vw" }}
+        className="rounded-lg object-contain w-full"
+        style={{ maxHeight: "65vh" }}
       />
       {audioSrc && <audio ref={audioRef} src={audioSrc} loop preload="auto" />}
 
       {loaded && (
-        <div className="w-full bg-black/70 rounded-xl px-4 py-3 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
-          {/* Scrub bar */}
+        <div className="w-full bg-black/70 rounded-xl px-3 sm:px-4 py-2 sm:py-3 flex flex-col gap-2 sm:gap-3" onClick={(e) => e.stopPropagation()}>
           <ScrubBar current={currentTime} duration={duration} onChange={handleSeek} />
-
-          {/* Controls row */}
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <button onClick={togglePlay} className="text-white hover:text-orange-400 transition-colors">
+              <button onClick={togglePlay} className="text-white hover:text-orange-400 transition-colors p-1">
                 {playing ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
               </button>
               <span className="text-white/60 text-xs font-mono">{fmt(currentTime)} / {fmt(duration)}</span>
             </div>
             <VolumeControl volume={volume} muted={muted} onVolumeChange={handleVolumeChange} onToggleMute={handleToggleMute} />
           </div>
-
-          {/* Audio status messages */}
           {hasAudio && audioFailed && (
             <p className="text-yellow-400/70 text-xs text-center">⚠️ Audio track unavailable</p>
           )}
@@ -274,7 +259,6 @@ const VideoPlayer = ({ src, audioSrc, hasAudio }: { src: string; audioSrc?: stri
   );
 };
 
-// ── Main lightbox ─────────────────────────────────────────────────────────────
 const MediaLightbox = ({ media, allMedia, currentIndex, onClose, onNavigate }: MediaLightboxProps) => {
   const [imgSrc, setImgSrc] = useState(media.url);
   const canGoPrevious = currentIndex > 0;
@@ -282,7 +266,6 @@ const MediaLightbox = ({ media, allMedia, currentIndex, onClose, onNavigate }: M
 
   useEffect(() => { setImgSrc(media.url); }, [media.url]);
 
-  // Keyboard navigation
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -305,43 +288,41 @@ const MediaLightbox = ({ media, allMedia, currentIndex, onClose, onNavigate }: M
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-2 sm:p-4"
       onClick={onClose}
     >
       {/* Close button */}
       <button
         onClick={onClose}
-        className="absolute top-4 right-4 rounded-full bg-white/10 p-2 hover:bg-white/20 transition-colors z-10"
+        className="absolute top-3 right-3 sm:top-4 sm:right-4 rounded-full bg-white/10 p-2.5 sm:p-2 hover:bg-white/20 transition-colors z-10"
         aria-label="Close"
       >
-        <X className="h-6 w-6 text-white" />
+        <X className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
       </button>
 
-      {/* Previous */}
+      {/* Desktop: side arrows */}
       {canGoPrevious && (
         <button
           onClick={(e) => { e.stopPropagation(); onNavigate(currentIndex - 1); }}
-          className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-white/10 p-3 hover:bg-white/20 transition-colors z-10"
+          className="hidden sm:flex absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-white/10 p-3 hover:bg-white/20 transition-colors z-10"
           aria-label="Previous"
         >
           <ChevronLeft className="h-8 w-8 text-white" />
         </button>
       )}
-
-      {/* Next */}
       {canGoNext && (
         <button
           onClick={(e) => { e.stopPropagation(); onNavigate(currentIndex + 1); }}
-          className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-white/10 p-3 hover:bg-white/20 transition-colors z-10"
+          className="hidden sm:flex absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-white/10 p-3 hover:bg-white/20 transition-colors z-10"
           aria-label="Next"
         >
           <ChevronRight className="h-8 w-8 text-white" />
         </button>
       )}
 
-      {/* Media content — stopPropagation so clicking media doesn't close */}
+      {/* Media content */}
       <div
-        className="relative flex flex-col items-center"
+        className="relative flex flex-col items-center w-full"
         onClick={(e) => e.stopPropagation()}
       >
         {media.type === "video" && media.isGif ? (
@@ -352,16 +333,38 @@ const MediaLightbox = ({ media, allMedia, currentIndex, onClose, onNavigate }: M
           <img
             src={imgSrc}
             alt="Reddit media"
-            className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain"
+            className="max-h-[80vh] max-w-[95vw] sm:max-w-[90vw] rounded-lg object-contain"
             onError={handleImgError}
           />
         )}
 
         {/* Counter badge */}
-        <div className="absolute top-4 right-4 bg-black/70 text-white text-sm px-3 py-2 rounded pointer-events-none">
+        <div className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-black/70 text-white text-xs sm:text-sm px-2 sm:px-3 py-1 sm:py-2 rounded pointer-events-none">
           {currentIndex + 1} / {allMedia.length}
         </div>
       </div>
+
+      {/* Mobile: bottom nav bar */}
+      {(canGoPrevious || canGoNext) && (
+        <div className="sm:hidden absolute bottom-4 left-0 right-0 flex justify-center gap-6 z-10">
+          <button
+            onClick={(e) => { e.stopPropagation(); if (canGoPrevious) onNavigate(currentIndex - 1); }}
+            disabled={!canGoPrevious}
+            className="rounded-full bg-white/10 p-4 hover:bg-white/20 transition-colors disabled:opacity-30"
+            aria-label="Previous"
+          >
+            <ChevronLeft className="h-6 w-6 text-white" />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); if (canGoNext) onNavigate(currentIndex + 1); }}
+            disabled={!canGoNext}
+            className="rounded-full bg-white/10 p-4 hover:bg-white/20 transition-colors disabled:opacity-30"
+            aria-label="Next"
+          >
+            <ChevronRight className="h-6 w-6 text-white" />
+          </button>
+        </div>
+      )}
     </div>
   );
 };

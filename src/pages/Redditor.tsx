@@ -39,7 +39,6 @@ const Redditor = () => {
     const postData = post.data;
     const found: MediaItem[] = [];
 
-    // ── Gallery ────────────────────────────────────────────────
     if (postData.is_gallery && postData.media_metadata) {
       Object.values(postData.media_metadata).forEach((item: any) => {
         if (item.status !== "valid") return;
@@ -53,10 +52,7 @@ const Redditor = () => {
           if (url) found.push({ type: "image", url, width: item.s?.x, height: item.s?.y });
         }
       });
-    }
-
-    // ── Reddit video ───────────────────────────────────────────
-    else if (postData.is_video && postData.media?.reddit_video) {
+    } else if (postData.is_video && postData.media?.reddit_video) {
       const vd = postData.media.reddit_video;
       const videoUrl = vd.fallback_url || vd.hls_url;
       const hasAudio = vd.has_audio;
@@ -66,10 +62,7 @@ const Redditor = () => {
         if (i !== -1) audioUrl = `${videoUrl.substring(0, i)}/DASH_audio.mp4`;
       }
       found.push({ type: "video", url: videoUrl, audioUrl, thumbnail: postData.thumbnail !== "default" ? postData.thumbnail : undefined, width: vd.width, height: vd.height, hasAudio });
-    }
-
-    // ── Image post — check for MP4 variant (GIF) ───────────────
-    else if (postData.post_hint === "image" && postData.url) {
+    } else if (postData.post_hint === "image" && postData.url) {
       const preview = postData.preview?.images?.[0];
       const mp4Url = clean(preview?.variants?.mp4?.source?.url);
       if (mp4Url) {
@@ -78,16 +71,10 @@ const Redditor = () => {
         const previewUrl = clean(preview?.source?.url) || postData.url;
         found.push({ type: "image", url: previewUrl, width: preview?.source?.width, height: preview?.source?.height });
       }
-    }
-
-    // ── rich:video ─────────────────────────────────────────────
-    else if (postData.post_hint === "rich:video" && postData.preview?.reddit_video_preview) {
+    } else if (postData.post_hint === "rich:video" && postData.preview?.reddit_video_preview) {
       const vp = postData.preview.reddit_video_preview;
       found.push({ type: "video", url: vp.fallback_url, thumbnail: postData.thumbnail, width: vp.width, height: vp.height });
-    }
-
-    // ── v.redd.it ──────────────────────────────────────────────
-    else if (postData.domain === "v.redd.it") {
+    } else if (postData.domain === "v.redd.it") {
       const src = postData.preview?.reddit_video_preview || postData.media?.reddit_video;
       if (src) {
         const videoUrl = src.fallback_url;
@@ -99,32 +86,20 @@ const Redditor = () => {
         }
         found.push({ type: "video", url: videoUrl, audioUrl, thumbnail: postData.thumbnail, width: src.width, height: src.height, hasAudio });
       }
-    }
-
-    // ── Direct .gif URL ────────────────────────────────────────
-    else if (postData.url && /\.gif$/i.test(postData.url)) {
+    } else if (postData.url && /\.gif$/i.test(postData.url)) {
       const preview = postData.preview?.images?.[0];
       const mp4Url = clean(preview?.variants?.mp4?.source?.url);
       if (mp4Url) found.push({ type: "video", url: mp4Url, isGif: true, width: preview?.variants?.mp4?.source?.width, height: preview?.variants?.mp4?.source?.height });
       else found.push({ type: "image", url: postData.url });
-    }
-
-    // ── Other direct image URLs ────────────────────────────────
-    else if (postData.url && /\.(jpg|jpeg|png|webp)$/i.test(postData.url)) {
+    } else if (postData.url && /\.(jpg|jpeg|png|webp)$/i.test(postData.url)) {
       found.push({ type: "image", url: postData.url });
-    }
-
-    // ── i.redd.it / imgur ──────────────────────────────────────
-    else if (postData.url && (postData.url.includes("i.redd.it") || postData.url.includes("imgur.com"))) {
+    } else if (postData.url && (postData.url.includes("i.redd.it") || postData.url.includes("imgur.com"))) {
       const preview = postData.preview?.images?.[0];
       const mp4Url = clean(preview?.variants?.mp4?.source?.url);
       if (mp4Url) found.push({ type: "video", url: mp4Url, isGif: true, width: preview?.variants?.mp4?.source?.width, height: preview?.variants?.mp4?.source?.height });
       else if (preview?.source?.url) found.push({ type: "image", url: clean(preview.source.url), width: preview.source.width, height: preview.source.height });
       else found.push({ type: "image", url: postData.url });
-    }
-
-    // ── Fallback: preview image ────────────────────────────────
-    else if (postData.preview?.images?.[0]?.source?.url) {
+    } else if (postData.preview?.images?.[0]?.source?.url) {
       const preview = postData.preview.images[0];
       const mp4Url = clean(preview?.variants?.mp4?.source?.url);
       if (mp4Url) found.push({ type: "video", url: mp4Url, isGif: true, width: preview?.variants?.mp4?.source?.width, height: preview?.variants?.mp4?.source?.height });
@@ -137,7 +112,6 @@ const Redditor = () => {
   const buildRedditUrl = (baseUrl: string, after: string | null = null) => {
     const cleanUrl = baseUrl.trim().replace(/\/$/, "").replace(/\.json$/, "");
     const subredditMatch = cleanUrl.match(/reddit\.com\/r\/([\w]+)/);
-
     let finalUrl: string;
     if (subredditMatch) {
       const sub = subredditMatch[1];
@@ -146,7 +120,6 @@ const Redditor = () => {
     } else {
       finalUrl = cleanUrl + ".json";
     }
-
     const params = new URLSearchParams();
     if (after) params.append("after", after);
     if (sortBy === "top") params.append("t", topTimeframe);
@@ -158,14 +131,10 @@ const Redditor = () => {
 
   const fetchRedditPage = async (url: string, after: string | null = null) => {
     const jsonUrl = buildRedditUrl(url, after);
-
-    // Method 1: Netlify proxy
     try {
       const res = await fetch(`${PROXY_URL}${encodeURIComponent(jsonUrl)}`, { headers: { Accept: "application/json" } });
       if (res.ok) return await res.json();
     } catch {}
-
-    // Method 2: Direct old.reddit.com
     try {
       const res = await fetch(jsonUrl.replace("www.reddit.com", "old.reddit.com"), {
         headers: { "User-Agent": "Mozilla/5.0", Accept: "application/json" },
@@ -173,7 +142,6 @@ const Redditor = () => {
       });
       if (res.ok) return await res.json();
     } catch {}
-
     throw new Error("Failed to fetch from Reddit.");
   };
 
@@ -182,17 +150,13 @@ const Redditor = () => {
     setHasSearched(true);
     setCurrentPage(1);
     setMediaFilter("all");
-
     try {
       const allMedia: MediaItem[] = [];
       let after: string | null = null;
       let pagesLoaded = 0;
-
       toast({ title: "Fetching media…", description: `Loading ${sortBy === "top" ? `top (${topTimeframe})` : sortBy} posts…` });
-
       while (pagesLoaded < MAX_REDDIT_PAGES) {
         const data = await fetchRedditPage(url.trim(), after);
-
         if (Array.isArray(data) && data[0]?.data?.children) {
           allMedia.push(...extractMediaFromPost(data[0].data.children[0]));
           break;
@@ -205,7 +169,6 @@ const Redditor = () => {
           await new Promise((r) => setTimeout(r, 500));
         } else break;
       }
-
       setMedia(allMedia);
       if (allMedia.length === 0) toast({ title: "No media found", description: "This subreddit has no extractable media." });
       else toast({ title: "Done!", description: `Found ${allMedia.length} items` });
@@ -227,7 +190,6 @@ const Redditor = () => {
     setCurrentPage(1);
   };
 
-  // Counts for each filter type
   const counts = {
     all: media.length,
     image: media.filter((i) => i.type === "image").length,
@@ -244,33 +206,40 @@ const Redditor = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="py-8">
+      <header className="py-6 sm:py-8">
         <h1 className="text-center">
-          <span className="text-5xl md:text-6xl font-bold text-primary tracking-tight">Redditor</span>
+          <span className="text-4xl sm:text-5xl md:text-6xl font-bold text-primary tracking-tight">Redditor</span>
         </h1>
       </header>
 
-      <main className="container max-w-6xl mx-auto px-4 pb-16">
-        <div className={`transition-all duration-500 ${hasSearched && media.length > 0 ? "mb-12" : "min-h-[50vh] flex flex-col justify-center"}`}>
-          <RedditorSearch onSearch={handleSearch} isLoading={isLoading} sortBy={sortBy} onSortChange={setSortBy} topTimeframe={topTimeframe} onTopTimeframeChange={setTopTimeframe} />
+      <main className="container max-w-6xl mx-auto px-3 sm:px-4 pb-16">
+        <div className={`transition-all duration-500 ${hasSearched && media.length > 0 ? "mb-8 sm:mb-12" : "min-h-[50vh] flex flex-col justify-center"}`}>
+          <RedditorSearch
+            onSearch={handleSearch}
+            isLoading={isLoading}
+            sortBy={sortBy}
+            onSortChange={setSortBy}
+            topTimeframe={topTimeframe}
+            onTopTimeframeChange={setTopTimeframe}
+          />
         </div>
 
         {hasSearched && media.length > 0 && (
           <>
-            {/* Stats + filter row */}
-            <div className="mb-4 text-muted-foreground text-sm">
+            {/* Stats line */}
+            <div className="mb-3 text-muted-foreground text-xs sm:text-sm leading-relaxed">
               Showing {Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, filteredMedia.length)}–{Math.min(currentPage * ITEMS_PER_PAGE, filteredMedia.length)} of {filteredMedia.length} items
               {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
               {" • "}Sorted by: {sortBy === "top" ? `Top (${topTimeframe})` : sortBy.charAt(0).toUpperCase() + sortBy.slice(1)}
             </div>
 
-            {/* Filter buttons */}
-            <div className="flex gap-2 mb-6">
+            {/* Filter buttons — horizontally scrollable on mobile */}
+            <div className="flex gap-2 mb-5 overflow-x-auto pb-1 -mx-3 px-3 sm:mx-0 sm:px-0 scrollbar-none">
               {filterButtons.map(({ key, label, icon }) => (
                 <button
                   key={key}
                   onClick={() => handleFilterChange(key)}
-                  className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                  className={`flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium border transition-colors whitespace-nowrap flex-shrink-0 ${
                     mediaFilter === key
                       ? "bg-primary text-primary-foreground border-primary"
                       : "bg-secondary text-muted-foreground border-border hover:border-muted-foreground/50 hover:text-foreground"
