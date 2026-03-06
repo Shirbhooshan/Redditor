@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { ArrowUp, Loader2 } from "lucide-react";
 
 type SortOption = "hot" | "best" | "top" | "new";
@@ -13,51 +13,76 @@ interface RedditorSearchProps {
   onTopTimeframeChange: (timeframe: TopTimeframe) => void;
 }
 
-const RedditorSearch = ({ 
-  onSearch, 
-  isLoading, 
-  sortBy, 
+const PREFIX = "https://www.reddit.com/r/";
+
+const RedditorSearch = ({
+  onSearch,
+  isLoading,
+  sortBy,
   onSortChange,
   topTimeframe,
-  onTopTimeframeChange 
+  onTopTimeframeChange,
 }: RedditorSearchProps) => {
-  const [url, setUrl] = useState("");
+  const [subreddit, setSubreddit] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (url.trim()) {
-      onSearch(url.trim());
+    const trimmed = subreddit.trim();
+    if (trimmed) onSearch(PREFIX + trimmed);
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let val = e.target.value;
+    // If user pastes a full Reddit URL, strip it down to just the subreddit name
+    if (val.includes("reddit.com/r/")) {
+      const match = val.match(/reddit\.com\/r\/([^/?#\s]+)/);
+      if (match) val = match[1];
     }
+    setSubreddit(val);
   };
 
   return (
     <form onSubmit={handleSubmit} className="w-full max-w-3xl mx-auto space-y-4">
-      {/* URL Input */}
-      <div className="relative flex items-center bg-secondary rounded-full border border-border hover:border-muted-foreground/50 focus-within:border-muted-foreground transition-colors">
+      {/* Search bar */}
+      <div
+        className="relative flex items-center bg-secondary rounded-full border border-border hover:border-muted-foreground/50 focus-within:border-muted-foreground transition-colors cursor-text"
+        onClick={() => inputRef.current?.focus()}
+      >
+        {/* Dimmed non-editable prefix */}
+        <span
+          className="pl-6 text-base text-muted-foreground/40 select-none whitespace-nowrap flex-shrink-0"
+          style={{ pointerEvents: "none" }}
+        >
+          {PREFIX}
+        </span>
+
+        {/* Editable subreddit name */}
         <input
-          type="url"
-          placeholder="Paste Reddit URL (e.g., https://www.reddit.com/r/pics/)"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
+          ref={inputRef}
+          type="text"
+          placeholder="subreddit"
+          value={subreddit}
+          onChange={handleChange}
           disabled={isLoading}
-          className="flex-1 bg-transparent px-6 py-4 text-base text-foreground placeholder:text-muted-foreground focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck={false}
+          className="flex-1 min-w-0 bg-transparent py-4 pr-2 text-base text-foreground placeholder:text-muted-foreground/40 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
         />
+
         <button
           type="submit"
-          disabled={isLoading || !url.trim()}
-          className="flex items-center justify-center h-10 w-10 mr-2 rounded-full bg-foreground text-background hover:bg-foreground/90 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed transition-colors"
+          disabled={isLoading || !subreddit.trim()}
+          className="flex items-center justify-center h-10 w-10 mr-2 rounded-full bg-foreground text-background hover:bg-foreground/90 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed transition-colors flex-shrink-0"
         >
-          {isLoading ? (
-            <Loader2 className="h-5 w-5 animate-spin" />
-          ) : (
-            <ArrowUp className="h-5 w-5" />
-          )}
+          {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ArrowUp className="h-5 w-5" />}
         </button>
       </div>
 
-      {/* Filter Options */}
+      {/* Sort controls */}
       <div className="flex flex-col sm:flex-row gap-4 items-center justify-center">
-        {/* Sort By */}
         <div className="flex items-center gap-2">
           <label className="text-sm font-medium text-muted-foreground">Sort:</label>
           <select
@@ -73,8 +98,7 @@ const RedditorSearch = ({
           </select>
         </div>
 
-        {/* Top Timeframe (only show when 'top' is selected) */}
-        {sortBy === 'top' && (
+        {sortBy === "top" && (
           <div className="flex items-center gap-2">
             <label className="text-sm font-medium text-muted-foreground">Time:</label>
             <select
@@ -97,17 +121,18 @@ const RedditorSearch = ({
       {/* Instructions */}
       <div className="mt-4 text-center space-y-2">
         <p className="text-muted-foreground text-sm">
-          Enter a Reddit subreddit or post URL to extract all images and videos
+          Type a subreddit name to extract all its images, GIFs and videos
         </p>
         <p className="text-muted-foreground text-xs">
-          Examples: 
-          <code className="mx-1 px-2 py-1 bg-muted rounded">https://www.reddit.com/r/pics</code>
-          or
-          <code className="mx-1 px-2 py-1 bg-muted rounded">https://www.reddit.com/r/videos</code>
+          Examples:&nbsp;
+          <code className="mx-1 px-2 py-1 bg-muted rounded">pics</code>
+          <code className="mx-1 px-2 py-1 bg-muted rounded">videos</code>
+          <code className="mx-1 px-2 py-1 bg-muted rounded">gifs</code>
         </p>
         <p className="text-muted-foreground text-xs">
-          <span className="font-semibold">Tip:</span> Use <span className="text-primary font-medium">Best</span> for highest quality content, 
-          <span className="text-primary font-medium"> Top (All Time)</span> for most popular posts ever
+          <span className="font-semibold">Tip:</span> Use{" "}
+          <span className="text-primary font-medium">Best</span> for highest quality,{" "}
+          <span className="text-primary font-medium">Top (All Time)</span> for most popular ever
         </p>
       </div>
     </form>
