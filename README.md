@@ -128,4 +128,4 @@ No environment variables are required.
 
 ## License
 
-Shiroe
+Shiroe 2026
