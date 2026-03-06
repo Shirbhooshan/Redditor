@@ -46,7 +46,7 @@ const RedditorSearch = ({
     <form onSubmit={handleSubmit} className="w-full max-w-3xl mx-auto space-y-4">
       {/* Search bar */}
       <div
-        className="relative flex items-center bg-secondary rounded-full border border-border hover:border-muted-foreground/50 focus-within:border-muted-foreground transition-colors cursor-text"
+        className="relative flex items-center bg-secondary rounded-full border border-border hover:border-muted-foreground/50 transition-colors cursor-text"
         onClick={() => inputRef.current?.focus()}
       >
         {/* Dimmed non-editable prefix */}
