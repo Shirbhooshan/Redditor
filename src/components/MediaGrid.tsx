@@ -5,11 +5,12 @@ import MediaLightbox from "./MediaLightbox";
 export interface MediaItem {
   type: "image" | "video";
   url: string;
-  audioUrl?: string; // For Reddit videos with separate audio
-  hasAudio?: boolean; // Flag to know if video has audio
+  audioUrl?: string;
+  hasAudio?: boolean;
   thumbnail?: string;
   width?: number;
   height?: number;
+  isGif?: boolean; // GIF stored as MP4 — enables frame scrubber
 }
 
 interface MediaGridProps {
@@ -18,25 +19,30 @@ interface MediaGridProps {
   itemsPerPage: number;
 }
 
+const MEDIA_PROXY = '/.netlify/functions/media-proxy?url=';
+
+export const proxyUrl = (url: string) => {
+  if (!url) return url;
+  try {
+    const parsed = new URL(url);
+    const proxied = ['preview.redd.it', 'external-preview.redd.it'];
+    if (proxied.some((d) => parsed.hostname === d)) {
+      return `${MEDIA_PROXY}${encodeURIComponent(url)}`;
+    }
+  } catch {}
+  return url;
+};
+
 const MediaGrid = ({ media, currentPage, itemsPerPage }: MediaGridProps) => {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentMedia = media.slice(startIndex, endIndex);
+  const currentMedia = media.slice(startIndex, startIndex + itemsPerPage);
 
-  if (currentMedia.length === 0) {
-    return null;
-  }
+  if (currentMedia.length === 0) return null;
 
   const handleMediaClick = (localIndex: number) => {
-    // Convert local index to global index
-    const globalIndex = startIndex + localIndex;
-    setSelectedIndex(globalIndex);
-  };
-
-  const handleNavigate = (newIndex: number) => {
-    setSelectedIndex(newIndex);
+    setSelectedIndex(startIndex + localIndex);
   };
 
   return (
@@ -51,29 +57,43 @@ const MediaGrid = ({ media, currentPage, itemsPerPage }: MediaGridProps) => {
             {item.type === "video" ? (
               <>
                 <video
-                  src={item.url}
+                  src={proxyUrl(item.url)}
                   className="h-full w-full object-cover"
                   muted
                   playsInline
                   preload="metadata"
                 />
                 <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors">
-                  <div className="rounded-full bg-white/90 p-3 group-hover:scale-110 transition-transform">
-                    <Play className="h-8 w-8 text-black fill-black" />
-                  </div>
+                  {!item.isGif && (
+                    <div className="rounded-full bg-white/90 p-3 group-hover:scale-110 transition-transform">
+                      <Play className="h-8 w-8 text-black fill-black" />
+                    </div>
+                  )}
                 </div>
-                {item.hasAudio && (
+                {item.isGif && (
+                  <div className="absolute top-2 left-2 bg-black/70 text-white text-xs font-bold px-2 py-1 rounded">
+                    GIF
+                  </div>
+                )}
+                {item.hasAudio && !item.isGif && (
                   <div className="absolute top-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
-                    🔊 Audio
+                    🔊
                   </div>
                 )}
               </>
             ) : (
               <img
-                src={item.url}
+                src={proxyUrl(item.url)}
                 alt="Reddit media"
                 className="h-full w-full object-cover group-hover:scale-105 transition-transform"
                 loading="lazy"
+                onError={(e) => {
+                  // If direct load fails, try via proxy
+                  const target = e.currentTarget;
+                  if (!target.src.includes('media-proxy')) {
+                    target.src = `${MEDIA_PROXY}${encodeURIComponent(item.url)}`;
+                  }
+                }}
               />
             )}
           </div>
@@ -86,7 +106,7 @@ const MediaGrid = ({ media, currentPage, itemsPerPage }: MediaGridProps) => {
           allMedia={media}
           currentIndex={selectedIndex}
           onClose={() => setSelectedIndex(null)}
-          onNavigate={handleNavigate}
+          onNavigate={(i) => setSelectedIndex(i)}
         />
       )}
     </>
