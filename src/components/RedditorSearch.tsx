@@ -69,7 +69,7 @@ const RedditorSearch = ({
           autoCorrect="off"
           autoCapitalize="off"
           spellCheck={false}
-          className="flex-1 min-w-0 bg-transparent py-4 pr-2 text-base text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-0 disabled:cursor-not-allowed disabled:opacity-50 selection:bg-primary selection:text-red"
+          className="flex-1 min-w-0 bg-transparent py-4 pr-2 text-base text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-0 disabled:cursor-not-allowed disabled:opacity-50"
         />
 
         <button
