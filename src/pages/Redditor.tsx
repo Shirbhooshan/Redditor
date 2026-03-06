@@ -9,6 +9,7 @@ const MAX_REDDIT_PAGES = 10;
 
 type SortOption = "hot" | "best" | "top" | "new";
 type TopTimeframe = "hour" | "day" | "week" | "month" | "year" | "all";
+type MediaFilter = "all" | "image" | "gif" | "video";
 
 const PROXY_URL = "/.netlify/functions/reddit-proxy?url=";
 
@@ -19,9 +20,18 @@ const Redditor = () => {
   const [hasSearched, setHasSearched] = useState(false);
   const [sortBy, setSortBy] = useState<SortOption>("best");
   const [topTimeframe, setTopTimeframe] = useState<TopTimeframe>("all");
+  const [mediaFilter, setMediaFilter] = useState<MediaFilter>("all");
   const { toast } = useToast();
 
-  const totalPages = Math.ceil(media.length / ITEMS_PER_PAGE);
+  const filteredMedia = media.filter((item) => {
+    if (mediaFilter === "all") return true;
+    if (mediaFilter === "image") return item.type === "image";
+    if (mediaFilter === "gif") return item.type === "video" && item.isGif === true;
+    if (mediaFilter === "video") return item.type === "video" && !item.isGif;
+    return true;
+  });
+
+  const totalPages = Math.ceil(filteredMedia.length / ITEMS_PER_PAGE);
 
   const clean = (url?: string) => url?.replace(/&amp;/g, "&") ?? "";
 
@@ -171,6 +181,7 @@ const Redditor = () => {
     setIsLoading(true);
     setHasSearched(true);
     setCurrentPage(1);
+    setMediaFilter("all");
 
     try {
       const allMedia: MediaItem[] = [];
@@ -211,6 +222,26 @@ const Redditor = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const handleFilterChange = (filter: MediaFilter) => {
+    setMediaFilter(filter);
+    setCurrentPage(1);
+  };
+
+  // Counts for each filter type
+  const counts = {
+    all: media.length,
+    image: media.filter((i) => i.type === "image").length,
+    gif: media.filter((i) => i.type === "video" && i.isGif).length,
+    video: media.filter((i) => i.type === "video" && !i.isGif).length,
+  };
+
+  const filterButtons: { key: MediaFilter; label: string; icon: string }[] = [
+    { key: "all", label: "All", icon: "⊞" },
+    { key: "image", label: "Image", icon: "🖼" },
+    { key: "gif", label: "GIF", icon: "🎞" },
+    { key: "video", label: "Video", icon: "▶" },
+  ];
+
   return (
     <div className="min-h-screen bg-background">
       <header className="py-8">
@@ -226,13 +257,46 @@ const Redditor = () => {
 
         {hasSearched && media.length > 0 && (
           <>
-            <div className="mb-6 text-muted-foreground text-sm">
-              Showing {Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, media.length)}–{Math.min(currentPage * ITEMS_PER_PAGE, media.length)} of {media.length} items
+            {/* Stats + filter row */}
+            <div className="mb-4 text-muted-foreground text-sm">
+              Showing {Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, filteredMedia.length)}–{Math.min(currentPage * ITEMS_PER_PAGE, filteredMedia.length)} of {filteredMedia.length} items
               {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
               {" • "}Sorted by: {sortBy === "top" ? `Top (${topTimeframe})` : sortBy.charAt(0).toUpperCase() + sortBy.slice(1)}
             </div>
-            <MediaGrid media={media} currentPage={currentPage} itemsPerPage={ITEMS_PER_PAGE} />
-            <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={handlePageChange} />
+
+            {/* Filter buttons */}
+            <div className="flex gap-2 mb-6">
+              {filterButtons.map(({ key, label, icon }) => (
+                <button
+                  key={key}
+                  onClick={() => handleFilterChange(key)}
+                  className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                    mediaFilter === key
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-secondary text-muted-foreground border-border hover:border-muted-foreground/50 hover:text-foreground"
+                  }`}
+                >
+                  <span>{icon}</span>
+                  <span>{label}</span>
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                    mediaFilter === key ? "bg-white/20" : "bg-muted"
+                  }`}>
+                    {counts[key]}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {filteredMedia.length > 0 ? (
+              <>
+                <MediaGrid media={filteredMedia} currentPage={currentPage} itemsPerPage={ITEMS_PER_PAGE} />
+                <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={handlePageChange} />
+              </>
+            ) : (
+              <div className="text-center py-20">
+                <p className="text-muted-foreground text-lg">No {mediaFilter}s found in this subreddit.</p>
+              </div>
+            )}
           </>
         )}
 
